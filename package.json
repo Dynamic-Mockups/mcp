@@ -1,0 +1,45 @@
+{
+  "name": "@dynamic-mockups/mcp",
+  "version": "1.0.0",
+  "description": "Official Dynamic Mockups MCP Server - Generate product mockups with AI assistants",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "dynamic-mockups-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "dynamic-mockups",
+    "mockups",
+    "ai",
+    "claude",
+    "anthropic",
+    "design",
+    "product-mockups"
+  ],
+  "author": "Dynamic Mockups <support@dynamicmockups.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dynamicmockups/mcp-server.git"
+  },
+  "homepage": "https://dynamicmockups.com",
+  "bugs": {
+    "url": "https://github.com/dynamicmockups/mcp-server/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "src/**/*"
+  ]
+}

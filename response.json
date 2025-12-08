@@ -1,0 +1,154 @@
+{
+  "timestamp": "2025-12-03T12:21:23.009Z",
+  "endpoint": "GET /collections",
+  "data": {
+    "data": [
+      {
+        "uuid": "a96e08f5-3f32-468a-aa79-56c61878256f",
+        "name": "Test Template Group",
+        "mockup_count": 2,
+        "created_at": "2025-06-02 13:43:05 UTC",
+        "updated_at": "2025-06-02 13:43:05 UTC",
+        "created_at_timestamp": 1748871785,
+        "updated_at_timestamp": 1748871785
+      },
+      {
+        "uuid": "ed050193-bf83-4de3-a2c8-cf627698e52c",
+        "name": "Indoors Collection",
+        "mockup_count": 4,
+        "created_at": "2025-07-04 06:20:32 UTC",
+        "updated_at": "2025-07-04 06:21:30 UTC",
+        "created_at_timestamp": 1751610032,
+        "updated_at_timestamp": 1751610090
+      },
+      {
+        "uuid": "2f2f359f-46d5-48bb-bdf2-c691f1656879",
+        "name": "Outdoors Collection",
+        "mockup_count": 5,
+        "created_at": "2025-07-04 06:20:38 UTC",
+        "updated_at": "2025-07-04 06:40:50 UTC",
+        "created_at_timestamp": 1751610038,
+        "updated_at_timestamp": 1751611250
+      },
+      {
+        "uuid": "adb8f7e8-0082-4cc1-9890-08135c4ffdb7",
+        "name": "Winter collection",
+        "mockup_count": 0,
+        "created_at": "2025-07-04 08:00:38 UTC",
+        "updated_at": "2025-07-04 08:00:38 UTC",
+        "created_at_timestamp": 1751616038,
+        "updated_at_timestamp": 1751616038
+      },
+      {
+        "uuid": "4510cdf6-7c0c-4ca8-80b2-6447e9760862",
+        "name": "Men",
+        "mockup_count": 7,
+        "created_at": "2025-07-28 08:24:06 UTC",
+        "updated_at": "2025-07-28 08:24:06 UTC",
+        "created_at_timestamp": 1753691046,
+        "updated_at_timestamp": 1753691046
+      },
+      {
+        "uuid": "6f0b6fda-b925-465c-b7eb-f39161c8f94b",
+        "name": "Women",
+        "mockup_count": 1,
+        "created_at": "2025-07-28 08:24:06 UTC",
+        "updated_at": "2025-07-28 08:24:06 UTC",
+        "created_at_timestamp": 1753691046,
+        "updated_at_timestamp": 1753691046
+      },
+      {
+        "uuid": "04c6ee77-31f5-402e-a4f3-6f70e62fbcf7",
+        "name": "Apparel",
+        "mockup_count": 4,
+        "created_at": "2025-07-28 08:24:06 UTC",
+        "updated_at": "2025-07-28 08:24:06 UTC",
+        "created_at_timestamp": 1753691046,
+        "updated_at_timestamp": 1753691046
+      },
+      {
+        "uuid": "bfc83052-0bc0-43ea-b73b-1a79d7d52f1f",
+        "name": "Skateboards",
+        "mockup_count": 2,
+        "created_at": "2025-07-28 08:24:46 UTC",
+        "updated_at": "2025-07-28 08:24:46 UTC",
+        "created_at_timestamp": 1753691086,
+        "updated_at_timestamp": 1753691086
+      },
+      {
+        "uuid": "4add9611-ca19-4f5e-9b71-06880267ee85",
+        "name": "Asia",
+        "mockup_count": 5,
+        "created_at": "2025-07-28 08:24:46 UTC",
+        "updated_at": "2025-10-21 09:34:21 UTC",
+        "created_at_timestamp": 1753691086,
+        "updated_at_timestamp": 1761039261
+      },
+      {
+        "uuid": "201a3015-485d-4029-844d-19385dd00a7e",
+        "name": "Pillows",
+        "mockup_count": 2,
+        "created_at": "2025-07-28 08:24:47 UTC",
+        "updated_at": "2025-07-28 08:24:47 UTC",
+        "created_at_timestamp": 1753691087,
+        "updated_at_timestamp": 1753691087
+      },
+      {
+        "uuid": "b0081424-dabf-418f-8e21-a468f865cba0",
+        "name": "Example Template Group",
+        "mockup_count": 2,
+        "created_at": "2025-10-20 19:46:57 UTC",
+        "updated_at": "2025-10-20 19:46:57 UTC",
+        "created_at_timestamp": 1760989617,
+        "updated_at_timestamp": 1760989617
+      },
+      {
+        "uuid": "c9418df4-6c20-4955-927e-ef020f6c74cd",
+        "name": "Testing maps",
+        "mockup_count": 3,
+        "created_at": "2025-11-03 11:16:53 UTC",
+        "updated_at": "2025-11-03 11:16:53 UTC",
+        "created_at_timestamp": 1762168613,
+        "updated_at_timestamp": 1762168613
+      },
+      {
+        "uuid": "64d78487-cdf0-41b2-869a-f31eb04091d4",
+        "name": "Map testing 2",
+        "mockup_count": 0,
+        "created_at": "2025-11-03 11:20:59 UTC",
+        "updated_at": "2025-11-03 11:20:59 UTC",
+        "created_at_timestamp": 1762168859,
+        "updated_at_timestamp": 1762168859
+      },
+      {
+        "uuid": "6fed2542-ed2a-4142-892a-9cdc1354f863",
+        "name": "WooCommerce collection test",
+        "mockup_count": 3,
+        "created_at": "2025-11-25 12:14:39 UTC",
+        "updated_at": "2025-11-25 12:14:39 UTC",
+        "created_at_timestamp": 1764072879,
+        "updated_at_timestamp": 1764072879
+      },
+      {
+        "uuid": "b2128a95-8bdf-40a9-b5dc-06edc9da44a0",
+        "name": "MCP SERVER TESTING",
+        "mockup_count": 0,
+        "created_at": "2025-12-03 11:49:20 UTC",
+        "updated_at": "2025-12-03 11:49:20 UTC",
+        "created_at_timestamp": 1764762560,
+        "updated_at_timestamp": 1764762560
+      },
+      {
+        "uuid": "4245a64e-0bb8-4eb9-bba2-1d7066a8711b",
+        "name": "MCP SERVER 2",
+        "mockup_count": 0,
+        "created_at": "2025-12-03 12:02:43 UTC",
+        "updated_at": "2025-12-03 12:02:43 UTC",
+        "created_at_timestamp": 1764763363,
+        "updated_at_timestamp": 1764763363
+      }
+    ],
+    "success": true,
+    "message": ""
+  }
+}
