@@ -26,11 +26,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dynamicmockups/mcp-server.git"
+    "url": "https://github.com/dynamic-mockups/mcp.git"
   },
   "homepage": "https://dynamicmockups.com",
   "bugs": {
-    "url": "https://github.com/dynamicmockups/mcp-server/issues"
+    "url": "https://github.com/dynamic-mockups/mcp/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
