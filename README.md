@@ -1,12 +1,15 @@
 # Dynamic Mockups MCP Server
 
-Official MCP (Model Context Protocol) server for the [Dynamic Mockups API](https://dynamicmockups.com). Generate product mockups directly from AI assistants like Claude, Cursor, Windsurf, and more.
+Official MCP server for [Dynamic Mockups](https://dynamicmockups.com) — a product mockup generator API. Create professional mockups directly from AI assistants like Claude, Cursor, and Windsurf.
+
+## Requirements
+
+- Node.js 18 or higher
+- Dynamic Mockups API key — [get one here](https://app.dynamicmockups.com/dashboard-api)
 
 ## Installation
 
-### Quick Start with npx
-
-No installation required - just configure your MCP client:
+Add the following to your MCP client configuration file:
 
 ```json
 {
@@ -22,136 +25,53 @@ No installation required - just configure your MCP client:
 }
 ```
 
-### Get Your API Key
+### Config File Locations
 
-1. Go to [Dynamic Mockups Dashboard](https://app.dynamicmockups.com/account/api-keys)
-2. Create a new API key
-3. Add it to your MCP client configuration
+| Client | Config File Path |
+|--------|------------------|
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Claude Code (CLI) | `.mcp.json` in project root |
+| Cursor | `.cursor/mcp.json` in project |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
 
-## Configuration by Client
+## Tools
 
-### Claude Desktop
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "npx",
-      "args": ["-y", "@dynamic-mockups/mcp"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-### Claude Code (CLI)
-
-Add to `.mcp.json` in your project root:
-
-```json
-{
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "npx",
-      "args": ["-y", "@dynamic-mockups/mcp"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-### Cursor
-
-Add to `.cursor/mcp.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "npx",
-      "args": ["-y", "@dynamic-mockups/mcp"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-### Windsurf
-
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "npx",
-      "args": ["-y", "@dynamic-mockups/mcp"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
-
-## Available Tools
-
-### API Information
-- **`get_api_info`** - Get API knowledge base (billing, rate limits, formats, best practices, support)
-
-### Catalogs
-- **`get_catalogs`** - Retrieve all available catalogs
-
-### Collections
-- **`get_collections`** - Retrieve collections (optionally filter by catalog)
-- **`create_collection`** - Create a new collection
-
-### Mockups
-- **`get_mockups`** - Get list of available mockups with optional filters
-- **`get_mockup_by_uuid`** - Retrieve a specific mockup by UUID
-
-### Rendering
-- **`create_render`** - Create a single mockup render with design assets
-- **`create_batch_render`** - Render multiple mockups in one request
-- **`export_print_files`** - Export print files for smart objects
-
-### PSD Files
-- **`upload_psd`** - Upload a PSD file with optional mockup template creation
-- **`delete_psd`** - Delete a PSD file with optional related mockups deletion
+| Tool | Description |
+|------|-------------|
+| `get_api_info` | Get API knowledge base (billing, rate limits, formats, best practices, support) |
+| `get_catalogs` | Retrieve all available catalogs |
+| `get_collections` | Retrieve collections (optionally filter by catalog) |
+| `create_collection` | Create a new collection |
+| `get_mockups` | Get list of available mockups with optional filters |
+| `get_mockup_by_uuid` | Retrieve a specific mockup by UUID |
+| `create_render` | Create a single mockup render with design assets (1 credit) |
+| `create_batch_render` | Render multiple mockups in one request (1 credit per image) |
+| `export_print_files` | Export high-resolution print files for production |
+| `upload_psd` | Upload a PSD file and optionally create a mockup template |
+| `delete_psd` | Delete a PSD file with optional related mockups deletion |
 
 ## Usage Examples
 
-### Get Your Catalogs
-
 Ask your AI assistant:
-> "Get my Dynamic Mockups catalogs"
 
-### Get Mockups from a Collection
-
-> "Show me all mockups in my T-shirt collection"
-
-### Create a Render
-
-> "Create a mockup render using mockup UUID abc123 with my logo from https://example.com/logo.png"
-
-### Batch Render
-
-> "Render my design on all mockups in the Summer collection"
+| Use Case | Example Prompt |
+|----------|----------------|
+| List catalogs | "Get my Dynamic Mockups catalogs" |
+| Browse mockups | "Show me all mockups in my T-shirt collection" |
+| Single render | "Create a mockup render using any T-shirt mockup with my artwork from url: https://example.com/my-design.png" |
+| Batch render | "Render my artwork from url: https://example.com/my-design.png on all mockups in the Winter T-shirt collection" |
+| Create collection | "Create a new collection called Summer 2025 Hoodies" |
+| Upload PSD | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it" |
+| API info | "What are the rate limits and supported file formats for Dynamic Mockups?" |
+| Print files | "Export print-ready files at 300 DPI for my poster mockup" |
 
 ## Development
 
 ### Local Installation
 
 ```bash
-git clone https://github.com/dynamicmockups/mcp-server.git
+git clone https://github.com/dynamic-mockups/mcp.git
 cd mcp-server
 npm install
 ```
@@ -196,8 +116,9 @@ The server returns clear error messages for common issues:
 
 - [Dynamic Mockups Website](https://dynamicmockups.com)
 - [API Documentation](https://docs.dynamicmockups.com)
-- [Get API Key](https://app.dynamicmockups.com/account/api-keys)
-- [GitHub Issues](https://github.com/dynamicmockups/mcp-server/issues)
+- [Get API Key](https://app.dynamicmockups.com/dashboard-api)
+- [GitHub Repository](https://github.com/dynamic-mockups/mcp)
+- [GitHub Issues](https://github.com/dynamic-mockups/mcp/issues)
 
 ## License
 
