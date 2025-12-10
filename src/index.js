@@ -99,7 +99,7 @@ function validateApiKey() {
       "API key not configured",
       {
         solution: "Set the DYNAMIC_MOCKUPS_API_KEY environment variable in your MCP client configuration.",
-        get_key_at: "https://app.dynamicmockups.com/account/api-keys",
+        get_key_at: "https://app.dynamicmockups.com/dashboard-api",
       }
     );
   }
