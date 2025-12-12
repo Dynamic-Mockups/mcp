@@ -4,11 +4,19 @@
  * Dynamic Mockups MCP Server
  * Official MCP server for the Dynamic Mockups API
  * https://dynamicmockups.com
+ *
+ * Supports both stdio and HTTP/SSE transports:
+ * - stdio: Default when run directly (for Claude Desktop, Cursor, etc.)
+ * - HTTP/SSE: When imported and used with startHttpServer() (for web-based clients)
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express from "express";
+import cors from "cors";
+import { randomUUID } from "node:crypto";
 import axios from "axios";
 import { ResponseFormatter } from "./response-formatter.js";
 
@@ -80,30 +88,69 @@ const server = new Server(
 // HTTP Client
 // =============================================================================
 
-function createApiClient() {
+/**
+ * Creates an API client with the provided API key.
+ * For stdio transport: uses environment variable
+ * For HTTP transport: uses client-provided API key from Authorization header
+ *
+ * @param {string} apiKey - The API key to use for requests
+ */
+function createApiClient(apiKey) {
   return axios.create({
     baseURL: API_BASE_URL,
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
-      "x-api-key": API_KEY || "",
+      "x-api-key": apiKey || "",
     },
     timeout: 60000, // 60 second timeout for render operations
     validateStatus: (status) => status < 500, // Only throw on 5xx errors
   });
 }
 
-function validateApiKey() {
-  if (!API_KEY) {
+/**
+ * Validates that an API key is present.
+ * @param {string} apiKey - The API key to validate
+ */
+function validateApiKey(apiKey) {
+  if (!apiKey) {
     return ResponseFormatter.error(
       "API key not configured",
       {
-        solution: "Set the DYNAMIC_MOCKUPS_API_KEY environment variable in your MCP client configuration.",
+        solution: "Provide your Dynamic Mockups API key. For HTTP transport, use the Authorization header (Bearer token). For stdio transport, set the DYNAMIC_MOCKUPS_API_KEY environment variable.",
         get_key_at: "https://app.dynamicmockups.com/dashboard-api",
       }
     );
   }
   return null;
+}
+
+/**
+ * Extracts the API key from various sources.
+ * Priority: requestInfo headers > environment variable
+ *
+ * @param {Object} extra - Extra info passed to handlers (contains requestInfo for HTTP transport)
+ */
+function getApiKey(extra) {
+  // For HTTP transport: check Authorization header (Bearer token) or x-api-key header
+  if (extra?.requestInfo?.headers) {
+    const headers = extra.requestInfo.headers;
+
+    // Check Authorization: Bearer <token>
+    const authHeader = headers.authorization || headers.Authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      return authHeader.slice(7);
+    }
+
+    // Check x-api-key header
+    const apiKeyHeader = headers["x-api-key"] || headers["X-Api-Key"];
+    if (apiKeyHeader) {
+      return apiKeyHeader;
+    }
+  }
+
+  // Fallback to environment variable (for stdio transport)
+  return API_KEY;
 }
 
 // =============================================================================
@@ -491,20 +538,22 @@ async function handleGetApiInfo(args) {
   return ResponseFormatter.ok(topicMap[topic] || API_KNOWLEDGE_BASE);
 }
 
-async function handleGetCatalogs() {
-  const error = validateApiKey();
+async function handleGetCatalogs(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
-    const response = await createApiClient().get("/catalogs");
+    const response = await createApiClient(apiKey).get("/catalogs");
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get catalogs");
   }
 }
 
-async function handleGetCollections(args = {}) {
-  const error = validateApiKey();
+async function handleGetCollections(args = {}, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -514,30 +563,32 @@ async function handleGetCollections(args = {}) {
       params.append("include_all_catalogs", args.include_all_catalogs);
     }
 
-    const response = await createApiClient().get(`/collections?${params}`);
+    const response = await createApiClient(apiKey).get(`/collections?${params}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get collections");
   }
 }
 
-async function handleCreateCollection(args) {
-  const error = validateApiKey();
+async function handleCreateCollection(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
     const payload = { name: args.name };
     if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
 
-    const response = await createApiClient().post("/collections", payload);
+    const response = await createApiClient(apiKey).post("/collections", payload);
     return ResponseFormatter.fromApiResponse(response, `Collection "${args.name}" created`);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create collection");
   }
 }
 
-async function handleGetMockups(args = {}) {
-  const error = validateApiKey();
+async function handleGetMockups(args = {}, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -549,27 +600,29 @@ async function handleGetMockups(args = {}) {
     }
     if (args.name) params.append("name", args.name);
 
-    const response = await createApiClient().get(`/mockups?${params}`);
+    const response = await createApiClient(apiKey).get(`/mockups?${params}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get mockups");
   }
 }
 
-async function handleGetMockupByUuid(args) {
-  const error = validateApiKey();
+async function handleGetMockupByUuid(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
-    const response = await createApiClient().get(`/mockup/${args.uuid}`);
+    const response = await createApiClient(apiKey).get(`/mockup/${args.uuid}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get mockup");
   }
 }
 
-async function handleCreateRender(args) {
-  const error = validateApiKey();
+async function handleCreateRender(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -581,22 +634,23 @@ async function handleCreateRender(args) {
     if (args.export_options) payload.export_options = args.export_options;
     if (args.text_layers) payload.text_layers = args.text_layers;
 
-    const response = await createApiClient().post("/renders", payload);
+    const response = await createApiClient(apiKey).post("/renders", payload);
     return ResponseFormatter.fromApiResponse(response, "Render created (1 credit used)");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create render");
   }
 }
 
-async function handleCreateBatchRender(args) {
-  const error = validateApiKey();
+async function handleCreateBatchRender(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
     const payload = { renders: args.renders };
     if (args.export_options) payload.export_options = args.export_options;
 
-    const response = await createApiClient().post("/renders/batch", payload);
+    const response = await createApiClient(apiKey).post("/renders/batch", payload);
     const count = args.renders?.length || 0;
     return ResponseFormatter.fromApiResponse(response, `Batch render complete (${count} credits used)`);
   } catch (err) {
@@ -604,8 +658,9 @@ async function handleCreateBatchRender(args) {
   }
 }
 
-async function handleExportPrintFiles(args) {
-  const error = validateApiKey();
+async function handleExportPrintFiles(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -617,15 +672,16 @@ async function handleExportPrintFiles(args) {
     if (args.export_options) payload.export_options = args.export_options;
     if (args.text_layers) payload.text_layers = args.text_layers;
 
-    const response = await createApiClient().post("/renders/print-files", payload);
+    const response = await createApiClient(apiKey).post("/renders/print-files", payload);
     return ResponseFormatter.fromApiResponse(response, "Print files exported");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to export print files");
   }
 }
 
-async function handleUploadPsd(args) {
-  const error = validateApiKey();
+async function handleUploadPsd(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -634,15 +690,16 @@ async function handleUploadPsd(args) {
     if (args.psd_category_id) payload.psd_category_id = args.psd_category_id;
     if (args.mockup_template) payload.mockup_template = args.mockup_template;
 
-    const response = await createApiClient().post("/psd/upload", payload);
+    const response = await createApiClient(apiKey).post("/psd/upload", payload);
     return ResponseFormatter.fromApiResponse(response, "PSD uploaded successfully");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to upload PSD");
   }
 }
 
-async function handleDeletePsd(args) {
-  const error = validateApiKey();
+async function handleDeletePsd(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
   if (error) return error;
 
   try {
@@ -651,7 +708,7 @@ async function handleDeletePsd(args) {
       payload.delete_related_mockups = args.delete_related_mockups;
     }
 
-    const response = await createApiClient().post("/psd/delete", payload);
+    const response = await createApiClient(apiKey).post("/psd/delete", payload);
     return ResponseFormatter.fromApiResponse(response, "PSD deleted successfully");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to delete PSD");
@@ -682,7 +739,7 @@ const toolHandlers = {
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
 
   const handler = toolHandlers[name];
@@ -691,7 +748,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 
   try {
-    return await handler(args || {});
+    // Pass extra context (contains requestInfo with headers for HTTP transport)
+    return await handler(args || {}, extra);
   } catch (err) {
     return ResponseFormatter.fromError(err, `Error executing ${name}`);
   }
@@ -701,12 +759,189 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 // Server Startup
 // =============================================================================
 
-async function main() {
+/**
+ * Start the MCP server with stdio transport (default)
+ * Used by: Claude Desktop, Claude Code, Cursor, Windsurf
+ */
+async function startStdioServer() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`Dynamic Mockups MCP Server v${SERVER_VERSION} running`);
+  console.error(`Dynamic Mockups MCP Server v${SERVER_VERSION} running (stdio)`);
 }
 
+/**
+ * Start the MCP server with Streamable HTTP transport
+ * Used by: Web-based clients like Lovable that require a URL endpoint
+ *
+ * Uses the modern StreamableHTTPServerTransport which supports both
+ * SSE streaming and direct HTTP responses per the MCP specification.
+ *
+ * @param {Object} options - Server options
+ * @param {number} options.port - Port to listen on (default: 3000)
+ * @param {string} options.host - Host to bind to (default: '0.0.0.0')
+ * @param {string|string[]} options.corsOrigin - CORS origin(s) (default: '*')
+ * @returns {Promise<{app: Express, httpServer: Server}>}
+ */
+async function startHttpServer(options = {}) {
+  const {
+    port = process.env.PORT || 3000,
+    host = process.env.HOST || "0.0.0.0",
+    corsOrigin = process.env.CORS_ORIGIN || "*",
+  } = options;
+
+  const app = express();
+
+  // CORS configuration - must allow MCP-specific headers and auth headers
+  app.use(cors({
+    origin: corsOrigin,
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "x-api-key",
+      "Mcp-Session-Id",
+      "Last-Event-Id",
+      "Mcp-Protocol-Version",
+    ],
+    exposedHeaders: ["Mcp-Session-Id"],
+    credentials: true,
+  }));
+
+  // Note: We don't use express.json() globally because StreamableHTTPServerTransport
+  // needs to read the raw body. We parse JSON only for non-MCP endpoints.
+
+  // Store active transports by session ID for multi-session support
+  const transports = new Map();
+
+  // Health check endpoint
+  app.get("/health", (req, res) => {
+    res.json({
+      status: "ok",
+      server: SERVER_NAME,
+      version: SERVER_VERSION,
+      transport: "streamable-http",
+      activeSessions: transports.size,
+    });
+  });
+
+  // API info endpoint (convenience endpoint, not MCP)
+  app.get("/api/info", (req, res) => {
+    res.json({
+      server: SERVER_NAME,
+      version: SERVER_VERSION,
+      api_key_configured: !!API_KEY,
+      tools: tools.map((t) => ({ name: t.name, description: t.description })),
+      endpoints: {
+        mcp: "/mcp",
+        health: "/health",
+      },
+    });
+  });
+
+  // MCP endpoint - handles all MCP communication (GET for SSE, POST for messages, DELETE for session termination)
+  // Available at both "/" and "/mcp" for flexibility
+  app.all(["/", "/mcp"], async (req, res) => {
+    // Check for existing session
+    const sessionId = req.headers["mcp-session-id"];
+
+    if (sessionId && transports.has(sessionId)) {
+      // Reuse existing transport for this session
+      const { transport } = transports.get(sessionId);
+      await transport.handleRequest(req, res);
+      return;
+    }
+
+    // For new connections (no session ID or unknown session), create new transport
+    if (req.method === "POST" || req.method === "GET") {
+      // Create a new MCP server instance for this connection
+      const connectionServer = new Server(
+        { name: SERVER_NAME, version: SERVER_VERSION },
+        { capabilities: { tools: {} } }
+      );
+
+      // Register the same handlers
+      connectionServer.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
+      connectionServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
+        const { name, arguments: args } = request.params;
+        const handler = toolHandlers[name];
+        if (!handler) {
+          return ResponseFormatter.error(`Unknown tool: ${name}`);
+        }
+        try {
+          // Pass extra context (contains requestInfo with headers for API key extraction)
+          return await handler(args || {}, extra);
+        } catch (err) {
+          return ResponseFormatter.fromError(err, `Error executing ${name}`);
+        }
+      });
+
+      // Create Streamable HTTP transport with session support
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => randomUUID(),
+        onsessioninitialized: (newSessionId) => {
+          console.error(`Session initialized: ${newSessionId}`);
+          transports.set(newSessionId, { transport, server: connectionServer });
+        },
+        onsessionclosed: (closedSessionId) => {
+          console.error(`Session closed: ${closedSessionId}`);
+          transports.delete(closedSessionId);
+        },
+      });
+
+      // Connect server to transport
+      await connectionServer.connect(transport);
+
+      // Handle the request
+      await transport.handleRequest(req, res);
+      return;
+    }
+
+    // Unknown session for DELETE or other methods
+    res.status(400).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Bad Request: No valid session found",
+      },
+      id: null,
+    });
+  });
+
+  // Legacy SSE endpoint for backwards compatibility
+  app.get("/sse", (req, res) => {
+    res.redirect(307, "/");
+  });
+
+  const httpServer = app.listen(port, host, () => {
+    console.error(`Dynamic Mockups MCP Server v${SERVER_VERSION} running`);
+    console.error(`Streamable HTTP transport available at http://${host}:${port}`);
+    console.error(`  - MCP endpoint: http://${host}:${port}/mcp`);
+    console.error(`  - Health check: http://${host}:${port}/health`);
+    console.error(`  - API info: http://${host}:${port}/api/info`);
+  });
+
+  return { app, httpServer };
+}
+
+/**
+ * Main entry point - determines transport based on command line args or environment
+ */
+async function main() {
+  const args = process.argv.slice(2);
+  const useHttp = args.includes("--http") || process.env.MCP_TRANSPORT === "http";
+
+  if (useHttp) {
+    await startHttpServer();
+  } else {
+    await startStdioServer();
+  }
+}
+
+// Export for programmatic use
+export { startHttpServer, startStdioServer, server, tools, toolHandlers };
+
+// Run if executed directly
 main().catch((err) => {
   console.error("Fatal error:", err);
   process.exit(1);
