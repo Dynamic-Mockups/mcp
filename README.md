@@ -13,15 +13,39 @@ Add the following to your MCP client configuration file:
 
 ```json
 {
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "npx",
-      "args": ["-y", "@dynamic-mockups/mcp"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
+   "mcpServers": {
+      "dynamic-mockups": {
+         "command": "npx",
+         "args": ["-y", "@dynamic-mockups/mcp"],
+         "env": {
+            "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
+         }
       }
-    }
-  }
+   }
+}
+```
+
+### Lovable
+
+For Lovable, simply enter:
+- **Server URL**: `https://mcp.dynamicmockups.com`
+- **API Key**: Your Dynamic Mockups API key ([get one here](https://app.dynamicmockups.com/dashboard-api))
+
+### HTTP Transport
+
+If you want to connect via HTTP instead of NPX, use:
+
+```json
+{
+   "mcpServers": {
+      "dynamic-mockups": {
+         "type": "http",
+         "url": "https://mcp.dynamicmockups.com",
+         "headers": {
+            "x-api-key": "your_api_key_here"
+         }
+      }
+   }
 }
 ```
 
@@ -65,75 +89,6 @@ Ask your AI assistant:
 | Upload PSD | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it" |
 | API info | "What are the rate limits and supported file formats for Dynamic Mockups?" |
 | Print files | "Export print-ready files at 300 DPI for my poster mockup" |
-
-## HTTP/SSE Transport (for web-based clients)
-
-For web-based MCP clients like Lovable that require a URL endpoint instead of stdio, the server supports HTTP/SSE transport.
-
-### Running HTTP Server Locally
-
-```bash
-DYNAMIC_MOCKUPS_API_KEY=your_key npm run start:http
-```
-
-The server will start on `http://localhost:3000` by default.
-
-### HTTP Server Configuration
-
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `PORT` | 3000 | HTTP server port |
-| `HOST` | 0.0.0.0 | Host to bind to |
-| `CORS_ORIGIN` | * | Allowed CORS origins |
-| `MCP_TRANSPORT` | stdio | Set to `http` to use HTTP transport |
-
-### HTTP Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET, POST, DELETE | Main MCP endpoint (Streamable HTTP transport) |
-| `/mcp` | GET, POST, DELETE | Alias for `/` |
-| `/health` | GET | Health check endpoint |
-| `/api/info` | GET | Server info and available tools |
-
-### Connecting from Lovable (or similar clients)
-
-1. **Deploy the server** to a hosting service (Railway, Render, Fly.io, etc.)
-2. **Set environment variables** on your hosting platform:
-   - `MCP_TRANSPORT`: `http`
-   - _(No API key needed server-side - users provide their own)_
-3. **In Lovable, enter:**
-   - **Server URL**: `https://mcp.dynamicmockups.com` (or your own domain)
-   - **API Key**: User's own Dynamic Mockups API key (get one at [app.dynamicmockups.com/dashboard-api](https://app.dynamicmockups.com/dashboard-api))
-
-### API Key Authentication
-
-For HTTP transport, each user provides their own Dynamic Mockups API key. The server accepts the API key via:
-
-1. **Authorization header** (recommended): `Authorization: Bearer <api_key>`
-2. **x-api-key header**: `x-api-key: <api_key>`
-
-This means:
-- **Users use their own credits** - each user's renders are charged to their account
-- **No shared API key** - you don't need to configure an API key on the server
-- **Secure** - API keys are sent per-request, not stored on the server
-
-### Example: Deploy to Railway
-
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Login and deploy
-railway login
-railway init
-railway up
-```
-
-Set environment variables in Railway dashboard:
-- `MCP_TRANSPORT=http`
-
-That's it! Users will provide their own API keys when connecting.
 
 ## Development
 
