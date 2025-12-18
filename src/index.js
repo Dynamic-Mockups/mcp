@@ -36,6 +36,39 @@ const SERVER_VERSION = "1.0.0";
 const API_KNOWLEDGE_BASE = {
   overview: "Dynamic Mockups API allows you to generate product mockups programmatically.",
 
+  integration: {
+    base_url: "https://app.dynamicmockups.com/api/v1",
+    required_headers: {
+      "Accept": "application/json",
+      "x-api-key": "<YOUR_DYNAMIC_MOCKUPS_API_KEY>"
+    },
+    get_api_key_at: "https://app.dynamicmockups.com/dashboard-api",
+    example_endpoints: {
+      "GET /catalogs": "List all catalogs",
+      "GET /collections": "List collections",
+      "POST /collections": "Create a collection",
+      "GET /mockups": "List mockup templates",
+      "GET /mockup/{uuid}": "Get mockup by UUID",
+      "POST /renders": "Create a single render",
+      "POST /renders/batch": "Create batch renders",
+      "POST /renders/print-files": "Export print files",
+      "POST /psd/upload": "Upload a PSD file",
+      "POST /psd/delete": "Delete a PSD file"
+    },
+    code_examples: {
+      javascript_fetch: `fetch('https://app.dynamicmockups.com/api/v1/mockups', {
+  headers: { 'Accept': 'application/json', 'x-api-key': 'YOUR_API_KEY' }
+})`,
+      javascript_axios: `axios.create({
+  baseURL: 'https://app.dynamicmockups.com/api/v1',
+  headers: { 'Accept': 'application/json', 'x-api-key': 'YOUR_API_KEY' }
+})`,
+      python: `requests.get('https://app.dynamicmockups.com/api/v1/mockups',
+  headers={'Accept': 'application/json', 'x-api-key': 'YOUR_API_KEY'})`,
+      curl: `curl -H "Accept: application/json" -H "x-api-key: YOUR_API_KEY" https://app.dynamicmockups.com/api/v1/mockups`
+    }
+  },
+
   billing: {
     credits_per_image: 1,
     free_credits: 50,
@@ -64,8 +97,10 @@ const API_KNOWLEDGE_BASE = {
 
   best_practices: [
     "Use create_batch_render for multiple images (more efficient than single renders)",
-    "Always include Accept: application/json header (handled automatically by this MCP)",
+    "Always include Accept: application/json header",
+    "Always include x-api-key header with your API key",
     "Store rendered image URLs promptly as they expire in 24 hours",
+    "Base URL for all API calls: https://app.dynamicmockups.com/api/v1",
   ],
 
   support: {
@@ -187,14 +222,22 @@ const tools = [
   // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "get_api_info",
-    description: `Get Dynamic Mockups API knowledge base including billing, rate limits, supported formats, and best practices.
+    description: `Get Dynamic Mockups API knowledge base including integration details, billing, rate limits, supported formats, and best practices.
 
 WHEN TO USE: Call this FIRST when user asks about:
+- How to integrate the API directly (base URL, headers, code examples)
 - Pricing, credits, or billing
 - Rate limits or API constraints
 - Supported file formats (input/output)
 - Best practices for rendering
 - How to contact support
+
+IMPORTANT FOR DIRECT API INTEGRATION:
+When users want to integrate the Dynamic Mockups API into their own systems (not using MCP tools), use topic="integration" to get:
+- Base URL: https://app.dynamicmockups.com/api/v1
+- Required headers (Accept, x-api-key)
+- Code examples for JavaScript, Python, cURL
+- List of all available endpoints
 
 This tool does NOT require an API call - returns cached knowledge instantly.`,
     inputSchema: {
@@ -202,8 +245,8 @@ This tool does NOT require an API call - returns cached knowledge instantly.`,
       properties: {
         topic: {
           type: "string",
-          enum: ["all", "billing", "rate_limits", "formats", "best_practices", "support"],
-          description: "Specific topic to retrieve. Use 'all' for complete knowledge base, or select specific topic for focused information.",
+          enum: ["all", "integration", "billing", "rate_limits", "formats", "best_practices", "support"],
+          description: "Specific topic to retrieve. Use 'integration' for API integration details (base URL, headers, code examples). Use 'all' for complete knowledge base.",
         },
       },
     },
@@ -808,7 +851,7 @@ RETURNS: {uuid, name} of the uploaded PSD file.`,
 
 API: POST /psd/delete
 
-WHEN TO USE: When user wants to:
+    WHEN TO USE: When user wants to:
 - Remove an uploaded PSD file
 - Clean up unused PSD files
 - Optionally remove all mockups derived from the PSD
@@ -841,6 +884,7 @@ async function handleGetApiInfo(args) {
   const topic = args?.topic || "all";
 
   const topicMap = {
+    integration: { integration: API_KNOWLEDGE_BASE.integration },
     billing: { billing: API_KNOWLEDGE_BASE.billing },
     rate_limits: { rate_limits: API_KNOWLEDGE_BASE.rate_limits },
     formats: { supported_formats: API_KNOWLEDGE_BASE.supported_formats, asset_upload: API_KNOWLEDGE_BASE.asset_upload },
