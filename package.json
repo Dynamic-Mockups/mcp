@@ -1,6 +1,6 @@
 {
   "name": "@dynamic-mockups/mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Official Dynamic Mockups MCP Server - Generate product mockups with AI assistants",
   "type": "module",
   "main": "src/index.js",
