@@ -80,8 +80,8 @@ const API_KNOWLEDGE_BASE = {
 // =============================================================================
 
 const server = new Server(
-  { name: SERVER_NAME, version: SERVER_VERSION },
-  { capabilities: { tools: {} } }
+    { name: SERVER_NAME, version: SERVER_VERSION },
+    { capabilities: { tools: {} } }
 );
 
 // =============================================================================
@@ -115,11 +115,11 @@ function createApiClient(apiKey) {
 function validateApiKey(apiKey) {
   if (!apiKey) {
     return ResponseFormatter.error(
-      "API key not configured",
-      {
-        solution: "Provide your Dynamic Mockups API key. For HTTP transport, use the Authorization header (Bearer token). For stdio transport, set the DYNAMIC_MOCKUPS_API_KEY environment variable.",
-        get_key_at: "https://app.dynamicmockups.com/dashboard-api",
-      }
+        "API key not configured",
+        {
+          solution: "Provide your Dynamic Mockups API key. For HTTP transport, use the Authorization header (Bearer token). For stdio transport, set the DYNAMIC_MOCKUPS_API_KEY environment variable.",
+          get_key_at: "https://app.dynamicmockups.com/dashboard-api",
+        }
     );
   }
   return null;
@@ -157,210 +157,377 @@ function getApiKey(extra) {
 // Tool Definitions
 // =============================================================================
 
+// =============================================================================
+// Tool Selection Guide (for LLM understanding)
+// =============================================================================
+//
+// WORKFLOW FOR RENDERING MOCKUPS:
+// 1. Call get_mockups to find available templates (returns mockup UUIDs AND smart_object UUIDs)
+// 2. Use create_render (single) or create_batch_render (multiple) to generate images
+// Note: get_mockups returns all data needed to render - no need to call get_mockup_by_uuid first!
+//
+// WHEN TO USE EACH TOOL:
+// - get_api_info: First call when user asks about limits, pricing, or capabilities
+// - get_catalogs: When user wants to see their workspace organization
+// - get_collections: When user wants to browse mockup groups or find mockups by category
+// - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
+// - get_mockup_by_uuid: Only when user needs ONE specific template (already has UUID)
+// - create_render: For generating 1 mockup image
+// - create_batch_render: For generating 2+ mockup images (more efficient)
+// - export_print_files: When user needs production-ready files with specific DPI
+// - upload_psd: When user wants to add their own PSD mockup template
+// - delete_psd: When user wants to remove an uploaded PSD
+// - create_collection: When user wants to organize mockups into groups
+//
+// =============================================================================
+
 const tools = [
-  // Knowledge Base Tool
+  // ─────────────────────────────────────────────────────────────────────────────
+  // KNOWLEDGE BASE TOOL
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "get_api_info",
-    description: "Get Dynamic Mockups API information including billing, rate limits, supported formats, and best practices. Use this to understand API capabilities and constraints.",
+    description: `Get Dynamic Mockups API knowledge base including billing, rate limits, supported formats, and best practices.
+
+WHEN TO USE: Call this FIRST when user asks about:
+- Pricing, credits, or billing
+- Rate limits or API constraints
+- Supported file formats (input/output)
+- Best practices for rendering
+- How to contact support
+
+This tool does NOT require an API call - returns cached knowledge instantly.`,
     inputSchema: {
       type: "object",
       properties: {
         topic: {
           type: "string",
           enum: ["all", "billing", "rate_limits", "formats", "best_practices", "support"],
-          description: "Specific topic to get info about, or 'all' for complete knowledge base",
+          description: "Specific topic to retrieve. Use 'all' for complete knowledge base, or select specific topic for focused information.",
         },
       },
     },
   },
 
-  // Catalog Tools
+  // ─────────────────────────────────────────────────────────────────────────────
+  // CATALOG & ORGANIZATION TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "get_catalogs",
-    description: "Retrieve all available catalogs. Catalogs are top-level containers for organizing collections and mockups.",
+    description: `Retrieve all available catalogs for the authenticated user.
+
+API: GET /catalogs
+
+WHEN TO USE: When user wants to:
+- See their workspace organization structure
+- Find a specific catalog UUID for filtering collections/mockups
+- Understand how their mockups are organized
+
+Catalogs are TOP-LEVEL containers that hold collections. Each catalog has a UUID, name, and type (custom or default).
+
+RETURNS: Array of catalogs with uuid, name, type, created_at fields.`,
     inputSchema: {
       type: "object",
       properties: {},
     },
   },
-
-  // Collection Tools
   {
     name: "get_collections",
-    description: "Retrieve collections, optionally filtered by catalog. Collections group related mockups together.",
+    description: `Retrieve collections with optional filtering by catalog.
+
+API: GET /collections
+
+WHEN TO USE: When user wants to:
+- Browse available mockup groups/categories
+- Find mockups organized by product type (e.g., "T-shirts", "Mugs")
+- Get a collection UUID to filter mockups
+
+Collections GROUP related mockups together within a catalog. By default, only returns collections from the default catalog.
+
+RETURNS: Array of collections with uuid, name, mockup_count, created_at fields.`,
     inputSchema: {
       type: "object",
       properties: {
         catalog_uuid: {
           type: "string",
-          description: "Filter collections by catalog UUID",
+          description: "Filter collections by specific catalog UUID. Get catalog UUIDs from get_catalogs.",
         },
         include_all_catalogs: {
           type: "boolean",
-          description: "Include collections from all catalogs (default: false, returns only default catalog)",
+          description: "Set to true to include collections from ALL catalogs. Default: false (only default catalog).",
         },
       },
     },
   },
   {
     name: "create_collection",
-    description: "Create a new collection to organize mockups",
+    description: `Create a new collection to organize mockups.
+
+API: POST /collections
+
+WHEN TO USE: When user wants to:
+- Create a new group/category for mockups
+- Organize mockups by project, client, or product type
+
+RETURNS: The created collection with uuid, name, and metadata.`,
     inputSchema: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "Name for the new collection",
+          description: "Name for the new collection (e.g., 'Summer 2025 T-shirts', 'Client ABC Mockups').",
         },
         catalog_uuid: {
           type: "string",
-          description: "Catalog UUID to create collection in (uses default catalog if not specified)",
+          description: "Optional catalog UUID to place this collection in. If omitted, uses the default catalog.",
         },
       },
       required: ["name"],
     },
   },
 
-  // Mockup Tools
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MOCKUP DISCOVERY TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "get_mockups",
-    description: "Retrieve mockups from My Templates with optional filtering. Returns mockup UUIDs needed for rendering.",
+    description: `Retrieve mockups from My Templates with optional filtering. This is the PRIMARY tool for discovering mockups.
+
+API: GET /mockups
+
+WHEN TO USE: When user wants to:
+- List all available mockup templates
+- Search for mockups by name
+- Find mockups in a specific collection or catalog
+- Get mockup data needed for rendering
+
+IMPORTANT: This returns EVERYTHING needed to render - both mockup UUIDs AND smart_object UUIDs. You do NOT need to call get_mockup_by_uuid before rendering.
+
+WORKFLOW: get_mockups → create_render (that's it!)
+
+RETURNS: Array of mockups, each containing:
+- uuid: mockup template UUID (use in create_render)
+- name, thumbnail
+- smart_objects[]: array with uuid (use in smart_objects param), name, size, position, print_area_presets[]
+- text_layers[]: uuid, name
+- collections[]`,
     inputSchema: {
       type: "object",
       properties: {
         catalog_uuid: {
           type: "string",
-          description: "Filter by catalog UUID",
+          description: "Filter mockups by catalog UUID. Get from get_catalogs.",
         },
         collection_uuid: {
           type: "string",
-          description: "Filter by collection UUID",
+          description: "Filter mockups by collection UUID. Get from get_collections.",
         },
         include_all_catalogs: {
           type: "boolean",
-          description: "Include mockups from all catalogs (default: false)",
+          description: "Set to true to include mockups from ALL catalogs. Default: false (only default catalog).",
         },
         name: {
           type: "string",
-          description: "Filter mockups by name (partial match)",
+          description: "Filter mockups by name (partial match, case-insensitive). E.g., 'mug' finds 'Coffee Mug', 'Beer Mug'.",
         },
       },
     },
   },
   {
     name: "get_mockup_by_uuid",
-    description: "Get detailed information about a specific mockup including its smart objects and configuration",
+    description: `Get detailed information about a SINGLE specific mockup by its UUID.
+
+API: GET /mockup/{uuid}
+
+WHEN TO USE: Only in specific scenarios:
+- User already has a mockup UUID and wants details about that ONE template
+- User provided a specific mockup UUID directly
+- Need to refresh data for a single known mockup
+
+NOT REQUIRED for rendering! The get_mockups tool already returns smart_object UUIDs. Only use this when you need info about ONE specific mockup and don't need to list/browse.
+
+RETURNS: Single mockup with:
+- uuid, name, thumbnail
+- smart_objects[]: uuid, name, size (width/height), position (top/left), print_area_presets[]
+- text_layers[]: uuid, name
+- collections[], thumbnails[]`,
     inputSchema: {
       type: "object",
       properties: {
         uuid: {
           type: "string",
-          description: "The mockup UUID",
+          description: "The mockup UUID. Get this from get_mockups response.",
         },
       },
       required: ["uuid"],
     },
   },
 
-  // Render Tools
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "create_render",
-    description: "Render a single mockup with design assets. Costs 1 credit per render. For multiple renders, use create_batch_render instead.",
+    description: `Render a SINGLE mockup with design assets. Returns an image URL.
+
+API: POST /renders
+COST: 1 credit per render
+
+WHEN TO USE: When user wants to generate exactly ONE mockup image.
+For 2+ images, use create_batch_render instead (more efficient, same cost).
+
+PREREQUISITES: Call get_mockups first - it returns both mockup_uuid AND smart_object uuids needed for rendering.
+
+SMART OBJECT OPTIONS:
+- asset.url: Public URL to design image (jpg, jpeg, png, webp, gif)
+- asset.fit: 'stretch' | 'contain' | 'cover' - how image fits the area
+- asset.size: {width, height} - custom dimensions in pixels
+- asset.position: {top, left} - custom positioning
+- asset.rotate: rotation angle in degrees (0-360)
+- color: hex color overlay (e.g., '#FF0000' for red)
+- pattern: {enabled: true, scale_percent: 60} - repeat pattern mode
+- blending_mode: Photoshop blend modes (NORMAL, MULTIPLY, SCREEN, OVERLAY, etc.)
+- adjustment_layers: {brightness, contrast, opacity, saturation, vibrance, blur}
+- print_area_preset_uuid: auto-position using preset (get from mockup details)
+
+RETURNS: {export_label, export_path} - export_path is the rendered image URL (valid 24h).`,
     inputSchema: {
       type: "object",
       properties: {
         mockup_uuid: {
           type: "string",
-          description: "UUID of the mockup template to render",
+          description: "UUID of the mockup template to render. Get from get_mockups.",
         },
         smart_objects: {
           type: "array",
-          description: "Smart objects configuration with design assets",
+          description: "Array of smart object configurations. Each mockup has one or more smart objects where you place your design.",
           items: {
             type: "object",
+            required: ["uuid"],
             properties: {
               uuid: {
                 type: "string",
-                description: "Smart object UUID (get from mockup details)",
+                description: "REQUIRED. Smart object UUID. Get from get_mockups response.",
               },
               asset: {
                 type: "object",
-                description: "Design asset configuration",
+                description: "Design asset to place in this smart object. Provide at minimum the url field.",
+                required: ["url"],
                 properties: {
                   url: {
                     type: "string",
-                    description: "URL to the design image (jpg, jpeg, png, webp, gif)",
+                    description: "REQUIRED. Public URL to the design image. Supported: jpg, jpeg, png, webp, gif.",
                   },
                   fit: {
                     type: "string",
                     enum: ["stretch", "contain", "cover"],
-                    description: "How to fit the asset in the smart object area",
+                    description: "Optional. How the asset fits: 'stretch' distorts to fill, 'contain' fits inside with padding, 'cover' fills and crops. Default: contain.",
                   },
                   size: {
                     type: "object",
+                    description: "Optional. Custom asset size in pixels. Only use if you need specific dimensions.",
                     properties: {
-                      width: { type: "integer" },
-                      height: { type: "integer" },
+                      width: { type: "integer", description: "Width in pixels" },
+                      height: { type: "integer", description: "Height in pixels" },
                     },
                   },
                   position: {
                     type: "object",
+                    description: "Optional. Custom asset position relative to smart object. Only use for manual positioning.",
                     properties: {
-                      top: { type: "integer" },
-                      left: { type: "integer" },
+                      top: { type: "integer", description: "Top offset in pixels" },
+                      left: { type: "integer", description: "Left offset in pixels" },
                     },
                   },
                   rotate: {
                     type: "number",
-                    description: "Rotation angle in degrees",
+                    description: "Optional. Rotation angle in degrees (0-360).",
                   },
                 },
               },
               color: {
                 type: "string",
-                description: "Color overlay in hex format (e.g., #FF0000)",
+                description: "Optional. Color overlay in hex format (e.g., '#FF0000' for red). Use for solid color fills instead of an image.",
+              },
+              pattern: {
+                type: "object",
+                description: "Optional. Repeat the asset as a seamless pattern. Only use when pattern effect is needed.",
+                properties: {
+                  enabled: {
+                    type: "boolean",
+                    description: "Set to true to enable pattern mode.",
+                  },
+                  scale_percent: {
+                    type: "number",
+                    description: "Pattern scale as percentage (e.g., 60 = 60% of original size).",
+                  },
+                },
+              },
+              blending_mode: {
+                type: "string",
+                enum: [
+                  "NORMAL", "DISSOLVE", "DARKEN", "MULTIPLY", "COLOR_BURN", "LINEAR_BURN", "DARKER_COLOR",
+                  "LIGHTEN", "SCREEN", "COLOR_DODGE", "LINEAR_DODGE", "LIGHTER_COLOR",
+                  "OVERLAY", "SOFT_LIGHT", "HARD_LIGHT", "VIVID_LIGHT", "LINEAR_LIGHT", "PIN_LIGHT", "HARD_MIX",
+                  "DIFFERENCE", "EXCLUSION", "SUBTRACT", "DIVIDE", "HUE", "SATURATION", "COLOR", "LUMINOSITY"
+                ],
+                description: "Optional. Photoshop blending mode. Default: NORMAL. Use MULTIPLY for printing on colored surfaces.",
+              },
+              adjustment_layers: {
+                type: "object",
+                description: "Optional. Image adjustments. Only use when user needs specific image corrections.",
+                properties: {
+                  brightness: { type: "integer", description: "Brightness: -150 to 150" },
+                  contrast: { type: "integer", description: "Contrast: -100 to 100" },
+                  opacity: { type: "integer", description: "Opacity: 0 to 100" },
+                  saturation: { type: "integer", description: "Saturation: -100 to 100" },
+                  vibrance: { type: "integer", description: "Vibrance: -100 to 100" },
+                  blur: { type: "integer", description: "Blur: 0 to 100" },
+                },
               },
               print_area_preset_uuid: {
                 type: "string",
-                description: "Print area preset UUID for automatic positioning",
+                description: "Optional. UUID of print area preset for automatic positioning. Alternative to manual size/position.",
               },
-            },
-          },
-        },
-        export_label: {
-          type: "string",
-          description: "Label for the exported image (appears in filename)",
-        },
-        export_options: {
-          type: "object",
-          properties: {
-            image_format: {
-              type: "string",
-              enum: ["jpg", "png", "webp"],
-              description: "Output image format (default: jpg)",
-            },
-            image_size: {
-              type: "integer",
-              description: "Output image size in pixels (default: 1000)",
-            },
-            mode: {
-              type: "string",
-              enum: ["view", "download"],
-              description: "URL mode - 'view' for browser display, 'download' for attachment",
             },
           },
         },
         text_layers: {
           type: "array",
-          description: "Text layer customizations",
+          description: "Optional. Customize text layers in the mockup (if the mockup has text layers).",
           items: {
             type: "object",
+            required: ["uuid", "text"],
             properties: {
-              uuid: { type: "string", description: "Text layer UUID" },
-              text: { type: "string", description: "Text content" },
-              font_family: { type: "string" },
-              font_size: { type: "number" },
-              font_color: { type: "string", description: "Hex color code" },
+              uuid: { type: "string", description: "REQUIRED. Text layer UUID. Get from get_mockups response." },
+              text: { type: "string", description: "REQUIRED. Text content to display." },
+              font_family: { type: "string", description: "Optional. Font family name (e.g., 'Arial', 'Helvetica')." },
+              font_size: { type: "number", description: "Optional. Font size in pixels." },
+              font_color: { type: "string", description: "Optional. Text color in hex format (e.g., '#FF5733')." },
+            },
+          },
+        },
+        export_label: {
+          type: "string",
+          description: "Optional. Custom label for the exported image. Appears in the filename.",
+        },
+        export_options: {
+          type: "object",
+          description: "Optional. Output image settings. If omitted, uses defaults (jpg, 1000px, view mode).",
+          properties: {
+            image_format: {
+              type: "string",
+              enum: ["jpg", "png", "webp"],
+              description: "Optional. Output format. Default: jpg. Use png for transparency, webp for best compression.",
+            },
+            image_size: {
+              type: "integer",
+              description: "Optional. Output image size in pixels (width). Default: 1000.",
+            },
+            mode: {
+              type: "string",
+              enum: ["view", "download"],
+              description: "Optional. Default: 'view' for browser display. Use 'download' for attachment header.",
             },
           },
         },
@@ -370,50 +537,124 @@ const tools = [
   },
   {
     name: "create_batch_render",
-    description: "Render multiple mockups in a single request. RECOMMENDED for rendering more than one image - more efficient and faster than individual renders. Costs 1 credit per image.",
+    description: `Render MULTIPLE mockups in a single request. Returns array of image URLs.
+
+API: POST /renders/batch
+COST: 1 credit per image
+
+WHEN TO USE: When user wants to generate 2 or more mockup images.
+MORE EFFICIENT than calling create_render multiple times - single API call, faster processing.
+
+Use cases:
+- Render same design on multiple mockup templates
+- Render different designs on different mockups
+- Generate a product catalog with many images
+
+PREREQUISITES: Call get_mockups first - it returns both mockup_uuid AND smart_object uuids for all templates.
+
+RETURNS: {total_renders, successful_renders, failed_renders, renders[]} where each render has {status, export_path, export_label, mockup_uuid}.`,
     inputSchema: {
       type: "object",
       properties: {
         renders: {
           type: "array",
-          description: "Array of render configurations",
+          description: "REQUIRED. Array of render configurations. Each item renders one mockup image.",
           items: {
             type: "object",
+            required: ["mockup_uuid", "smart_objects"],
             properties: {
               mockup_uuid: {
                 type: "string",
-                description: "UUID of the mockup template",
+                description: "REQUIRED. UUID of the mockup template. Get from get_mockups.",
               },
               smart_objects: {
                 type: "array",
-                description: "Smart objects configuration (same as create_render)",
+                description: "REQUIRED. Smart objects configuration. Same structure as create_render.",
+                items: {
+                  type: "object",
+                  required: ["uuid"],
+                  properties: {
+                    uuid: { type: "string", description: "REQUIRED. Smart object UUID from get_mockups." },
+                    asset: {
+                      type: "object",
+                      required: ["url"],
+                      properties: {
+                        url: { type: "string", description: "REQUIRED. Public URL to design image." },
+                        fit: { type: "string", enum: ["stretch", "contain", "cover"], description: "Optional. Default: contain." },
+                        size: { type: "object", description: "Optional.", properties: { width: { type: "integer" }, height: { type: "integer" } } },
+                        position: { type: "object", description: "Optional.", properties: { top: { type: "integer" }, left: { type: "integer" } } },
+                        rotate: { type: "number", description: "Optional." },
+                      },
+                    },
+                    color: { type: "string", description: "Optional. Hex color overlay." },
+                    pattern: {
+                      type: "object",
+                      description: "Optional.",
+                      properties: {
+                        enabled: { type: "boolean" },
+                        scale_percent: { type: "number" },
+                      },
+                    },
+                    blending_mode: {
+                      type: "string",
+                      description: "Optional. Default: NORMAL.",
+                      enum: ["NORMAL", "DISSOLVE", "DARKEN", "MULTIPLY", "COLOR_BURN", "LINEAR_BURN", "DARKER_COLOR", "LIGHTEN", "SCREEN", "COLOR_DODGE", "LINEAR_DODGE", "LIGHTER_COLOR", "OVERLAY", "SOFT_LIGHT", "HARD_LIGHT", "VIVID_LIGHT", "LINEAR_LIGHT", "PIN_LIGHT", "HARD_MIX", "DIFFERENCE", "EXCLUSION", "SUBTRACT", "DIVIDE", "HUE", "SATURATION", "COLOR", "LUMINOSITY"],
+                    },
+                    adjustment_layers: {
+                      type: "object",
+                      description: "Optional.",
+                      properties: {
+                        brightness: { type: "integer" },
+                        contrast: { type: "integer" },
+                        opacity: { type: "integer" },
+                        saturation: { type: "integer" },
+                        vibrance: { type: "integer" },
+                        blur: { type: "integer" },
+                      },
+                    },
+                    print_area_preset_uuid: { type: "string", description: "Optional." },
+                  },
+                },
               },
               text_layers: {
                 type: "array",
-                description: "Text layer customizations",
+                description: "Optional. Text layer customizations.",
+                items: {
+                  type: "object",
+                  required: ["uuid", "text"],
+                  properties: {
+                    uuid: { type: "string", description: "REQUIRED." },
+                    text: { type: "string", description: "REQUIRED." },
+                    font_family: { type: "string", description: "Optional." },
+                    font_size: { type: "number", description: "Optional." },
+                    font_color: { type: "string", description: "Optional." },
+                  },
+                },
               },
               export_label: {
                 type: "string",
-                description: "Label for this specific render",
+                description: "Optional. Label for this specific render in the batch.",
               },
             },
-            required: ["mockup_uuid", "smart_objects"],
           },
         },
         export_options: {
           type: "object",
-          description: "Export options applied to all renders in the batch",
+          description: "Optional. Export options applied to ALL renders in the batch. If omitted, uses defaults.",
           properties: {
             image_format: {
               type: "string",
               enum: ["jpg", "png", "webp"],
+              description: "Optional. Output format for all renders. Default: jpg.",
             },
             image_size: {
               type: "integer",
+              description: "Optional. Output image size in pixels for all renders. Default: 1000.",
             },
             mode: {
               type: "string",
               enum: ["view", "download"],
+              description: "Optional. 'view' or 'download' mode for all renders. Default: view.",
             },
           },
         },
@@ -423,33 +664,80 @@ const tools = [
   },
   {
     name: "export_print_files",
-    description: "Export high-resolution print files for production. Supports custom DPI settings.",
+    description: `Export high-resolution print files for production use.
+
+API: POST /renders/print-files
+COST: 1 credit per each print file
+
+WHEN TO USE: When user needs:
+- Production-ready files for printing
+- High DPI output (e.g., 300 DPI for professional printing)
+- Print files for each smart object separately
+
+Unlike create_render which outputs the full mockup, this exports the design as it will appear when printed - useful for sending to print shops.
+
+RETURNS: {print_files[]} where each has {export_path, smart_object_uuid, smart_object_name}.`,
     inputSchema: {
       type: "object",
       properties: {
         mockup_uuid: {
           type: "string",
-          description: "UUID of the mockup template",
+          description: "REQUIRED. UUID of the mockup template. Get from get_mockups.",
         },
         smart_objects: {
           type: "array",
-          description: "Smart objects configuration",
+          description: "REQUIRED. Smart objects configuration. Same structure as create_render.",
+          items: {
+            type: "object",
+            required: ["uuid"],
+            properties: {
+              uuid: { type: "string", description: "REQUIRED. Smart object UUID from get_mockups." },
+              asset: {
+                type: "object",
+                required: ["url"],
+                properties: {
+                  url: { type: "string", description: "REQUIRED. Public URL to design image." },
+                  fit: { type: "string", enum: ["stretch", "contain", "cover"], description: "Optional. Default: contain." },
+                  size: { type: "object", description: "Optional.", properties: { width: { type: "integer" }, height: { type: "integer" } } },
+                  position: { type: "object", description: "Optional.", properties: { top: { type: "integer" }, left: { type: "integer" } } },
+                  rotate: { type: "number", description: "Optional." },
+                },
+              },
+              color: { type: "string", description: "Optional." },
+              pattern: { type: "object", description: "Optional.", properties: { enabled: { type: "boolean" }, scale_percent: { type: "number" } } },
+              blending_mode: { type: "string", description: "Optional.", enum: ["NORMAL", "DISSOLVE", "DARKEN", "MULTIPLY", "COLOR_BURN", "LINEAR_BURN", "DARKER_COLOR", "LIGHTEN", "SCREEN", "COLOR_DODGE", "LINEAR_DODGE", "LIGHTER_COLOR", "OVERLAY", "SOFT_LIGHT", "HARD_LIGHT", "VIVID_LIGHT", "LINEAR_LIGHT", "PIN_LIGHT", "HARD_MIX", "DIFFERENCE", "EXCLUSION", "SUBTRACT", "DIVIDE", "HUE", "SATURATION", "COLOR", "LUMINOSITY"] },
+              adjustment_layers: { type: "object", description: "Optional.", properties: { brightness: { type: "integer" }, contrast: { type: "integer" }, opacity: { type: "integer" }, saturation: { type: "integer" }, vibrance: { type: "integer" }, blur: { type: "integer" } } },
+              print_area_preset_uuid: { type: "string", description: "Optional." },
+            },
+          },
         },
         text_layers: {
           type: "array",
-          description: "Text layer customizations",
+          description: "Optional. Text layer customizations.",
+          items: {
+            type: "object",
+            required: ["uuid", "text"],
+            properties: {
+              uuid: { type: "string", description: "REQUIRED." },
+              text: { type: "string", description: "REQUIRED." },
+              font_family: { type: "string", description: "Optional." },
+              font_size: { type: "number", description: "Optional." },
+              font_color: { type: "string", description: "Optional." },
+            },
+          },
         },
         export_label: {
           type: "string",
-          description: "Label for the export",
+          description: "Optional. Label for the exported files.",
         },
         export_options: {
           type: "object",
+          description: "Optional. Print file export settings.",
           properties: {
-            image_format: { type: "string", enum: ["jpg", "png", "webp"] },
-            image_size: { type: "integer" },
-            image_dpi: { type: "integer", description: "DPI for print (e.g., 300)" },
-            mode: { type: "string", enum: ["view", "download"] },
+            image_format: { type: "string", enum: ["jpg", "png", "webp"], description: "Optional. Output format. PNG recommended for print." },
+            image_size: { type: "integer", description: "Optional. Output size in pixels." },
+            image_dpi: { type: "integer", description: "Optional. DPI for print output. Standard: 300 for professional printing, 150 for web-to-print." },
+            mode: { type: "string", enum: ["view", "download"], description: "Optional. Default: view." },
           },
         },
       },
@@ -457,41 +745,56 @@ const tools = [
     },
   },
 
-  // PSD Management Tools
+  // ─────────────────────────────────────────────────────────────────────────────
+  // PSD MANAGEMENT TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
   {
     name: "upload_psd",
-    description: "Upload a PSD file to create custom mockup templates. The PSD should contain smart object layers.",
+    description: `Upload a PSD file to create custom mockup templates.
+
+API: POST /psd/upload
+
+WHEN TO USE: When user wants to:
+- Add their own PSD mockup template
+- Create custom mockups from their Photoshop files
+- The PSD must contain smart object layers for design placement
+
+WORKFLOW:
+1. Upload PSD with create_after_upload: true to auto-create mockup template
+2. Or upload PSD first, then manually create mockup template later
+
+RETURNS: {uuid, name} of the uploaded PSD file.`,
     inputSchema: {
       type: "object",
       properties: {
         psd_file_url: {
           type: "string",
-          description: "Public URL to the PSD file",
+          description: "REQUIRED. Public URL to the PSD file. Must be directly downloadable (not a preview page).",
         },
         psd_name: {
           type: "string",
-          description: "Name for the uploaded PSD",
+          description: "Optional. Custom name for the uploaded PSD. If omitted, uses filename from URL.",
         },
         psd_category_id: {
           type: "integer",
-          description: "Category ID for organization",
+          description: "Optional. Category ID for organizing PSD files.",
         },
         mockup_template: {
           type: "object",
-          description: "Automatically create a mockup template from the PSD",
+          description: "Optional. Settings for automatically creating a mockup template from the PSD.",
           properties: {
             create_after_upload: {
               type: "boolean",
-              description: "Create mockup template after upload",
+              description: "Optional. Set to true to automatically create a mockup template after upload.",
             },
             collections: {
               type: "array",
               items: { type: "string" },
-              description: "Collection UUIDs to add the mockup to",
+              description: "Optional. Collection UUIDs to add the new mockup to. Get from get_collections.",
             },
             catalog_uuid: {
               type: "string",
-              description: "Catalog UUID for the mockup",
+              description: "Optional. Catalog UUID to add the mockup to. If omitted, uses default catalog.",
             },
           },
         },
@@ -501,17 +804,28 @@ const tools = [
   },
   {
     name: "delete_psd",
-    description: "Delete a PSD file and optionally all mockups created from it",
+    description: `Delete a PSD file and optionally all mockups created from it.
+
+API: POST /psd/delete
+
+WHEN TO USE: When user wants to:
+- Remove an uploaded PSD file
+- Clean up unused PSD files
+- Optionally remove all mockups derived from the PSD
+
+WARNING: If delete_related_mockups is true, all mockups created from this PSD will be permanently deleted.
+
+RETURNS: Success confirmation message.`,
     inputSchema: {
       type: "object",
       properties: {
         psd_uuid: {
           type: "string",
-          description: "UUID of the PSD to delete",
+          description: "REQUIRED. UUID of the PSD file to delete.",
         },
         delete_related_mockups: {
           type: "boolean",
-          description: "Also delete all mockups created from this PSD (default: false)",
+          description: "Optional. Set to true to also delete all mockups created from this PSD. Default: false (keeps mockups).",
         },
       },
       required: ["psd_uuid"],
@@ -856,8 +1170,8 @@ async function startHttpServer(options = {}) {
     if (req.method === "POST" || req.method === "GET") {
       // Create a new MCP server instance for this connection
       const connectionServer = new Server(
-        { name: SERVER_NAME, version: SERVER_VERSION },
-        { capabilities: { tools: {} } }
+          { name: SERVER_NAME, version: SERVER_VERSION },
+          { capabilities: { tools: {} } }
       );
 
       // Register the same handlers
