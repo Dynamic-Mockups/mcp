@@ -111,6 +111,290 @@ const API_KNOWLEDGE_BASE = {
 };
 
 // =============================================================================
+// Embed Editor Knowledge Base
+// =============================================================================
+
+const EMBED_EDITOR_KNOWLEDGE_BASE = {
+  overview: `Dynamic Mockups Embed Editor lets you add a powerful mockup editor directly to your website or app via iFrame.
+Choose between the Classic Editor (template-based mockups) or MockAnything Editor (AI-powered, turn any image into a mockup).
+No API implementation required - just embed with a few lines of JavaScript.`,
+
+  editor_types: {
+    classic: {
+      description: "Template-based mockup editor with catalog of pre-made mockup templates",
+      use_case: "Best for consistent, professional product mockups from your template library",
+      features: ["Browse mockup catalog", "Upload artwork", "Customize colors", "Export mockups"],
+    },
+    mockanything: {
+      description: "AI-powered editor that turns any image into a customizable mockup",
+      use_case: "Best for creative flexibility - generate mockups from any product photo",
+      features: ["AI scene generation", "Ethnicity/pose changes", "Environment replacement", "AI photoshoot", "Smart product detection"],
+      ai_credits: {
+        prompt_generation: "3 credits (SeeDream 4.0)",
+        ai_tools: "5 credits (NanoBanana) - scene change, ethnicity, camera angle, environment",
+        ai_photoshoot: "3 credits per variation",
+        free_features: ["Artwork placement", "Product color changes", "Smart detection", "Exports"],
+      },
+    },
+  },
+
+  quick_start: {
+    step_1_iframe: `<iframe
+  id="dm-iframe"
+  src="https://embed.dynamicmockups.com"
+  style="width: 100%; height: 90vh"
+></iframe>`,
+    step_2_cdn_script: `<script src="https://cdn.jsdelivr.net/npm/@dynamic-mockups/mockup-editor-sdk@latest/dist/index.js"></script>`,
+    step_3_init: `<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    DynamicMockups.initDynamicMockupsIframe({
+      iframeId: "dm-iframe",
+      data: { "x-website-key": "YOUR_WEBSITE_KEY" },
+      mode: "download",
+    });
+  });
+</script>`,
+    get_website_key: "https://app.dynamicmockups.com/mockup-editor-embed-integrations",
+  },
+
+  npm_integration: {
+    install: "npm install @dynamic-mockups/mockup-editor-sdk@latest",
+    usage: `import { initDynamicMockupsIframe } from "@dynamic-mockups/mockup-editor-sdk";
+
+initDynamicMockupsIframe({
+  iframeId: "dm-iframe",
+  data: { "x-website-key": "YOUR_WEBSITE_KEY" },
+  mode: "download",
+});`,
+  },
+
+  specific_mockup: {
+    description: "Open a specific mockup directly instead of showing the full catalog",
+    iframe_src: "https://embed.dynamicmockups.com/mockup/{MOCKUP_UUID}/",
+    example: `<iframe
+  id="dm-iframe"
+  src="https://embed.dynamicmockups.com/mockup/43981bf4-3f1a-46cd-985e-3d9bb40cef36/"
+  style="width: 100%; height: 90vh"
+></iframe>`,
+    get_uuid: "Use get_mockups API or find in the web app editor URL",
+  },
+
+  init_function_params: {
+    iframeId: { type: "string", required: true, default: "dm-iframe", description: "ID of the iframe element" },
+    data: { type: "object", required: true, description: "Configuration object for editor behavior" },
+    mode: { type: "string", required: true, options: ["download", "custom"], description: "download: user downloads image directly. custom: use callback to handle export" },
+    callback: { type: "function", required: false, description: "Required when mode='custom'. Receives export data when user exports mockup" },
+  },
+
+  data_options: {
+    "x-website-key": { type: "string", required: true, description: "Your website key from Dynamic Mockups dashboard" },
+    editorType: { type: "string", required: false, default: "classic", options: ["classic", "mockanything"], description: "Editor type to display" },
+    themeAppearance: { type: "string", required: false, default: "light", options: ["light", "dark"], description: "UI theme" },
+    showColorPicker: { type: "boolean", required: false, default: true, description: "Show color picker" },
+    showColorPresets: { type: "boolean", required: false, default: false, description: "Show color presets from your account" },
+    showCollectionsWidget: { type: "boolean", required: false, default: true, description: "Show collections widget" },
+    showSmartObjectArea: { type: "boolean", required: false, default: false, description: "Display smart object boundaries" },
+    showTransformControls: { type: "boolean", required: false, default: true, description: "Show width/height/rotate inputs" },
+    showArtworkLibrary: { type: "boolean", required: false, default: false, description: "Show artwork library" },
+    showUploadYourArtwork: { type: "boolean", required: false, default: true, description: "Show 'Upload your artwork' button" },
+    showArtworkEditor: { type: "boolean", required: false, default: true, description: "Show artwork editor" },
+    oneColorPerSmartObject: { type: "boolean", required: false, default: false, description: "Restrict to one color per smart object" },
+    enableColorOptions: { type: "boolean", required: false, default: true, description: "Display color options" },
+    enableCreatePrintFiles: { type: "boolean", required: false, default: false, description: "Enable print file export" },
+    enableCollectionExport: { type: "boolean", required: false, default: false, description: "Export all mockups in collection at once" },
+    exportMockupsButtonText: { type: "string", required: false, default: "Export Mockups", description: "Custom export button text" },
+    designUrl: { type: "string", required: false, description: "Pre-load design URL (disables user upload)" },
+    customFields: { type: "object", required: false, description: "Custom data to receive back in callback" },
+    mockupExportOptions: {
+      image_format: { type: "string", default: "webp", options: ["webp", "jpg", "png"] },
+      image_size: { type: "number", default: 1080, description: "Output width in pixels" },
+      mode: { type: "string", default: "download", options: ["download", "view"] },
+    },
+    colorPresets: {
+      type: "array",
+      required: false,
+      description: "Custom color presets for the color picker",
+      structure: {
+        name: "string (optional) - preset name",
+        autoApplyColors: "boolean (optional) - auto-apply colors when selected",
+        colors: "array (required) - array of { hex: string, name?: string }",
+      },
+      example: `[
+  {
+    name: "Brand Colors",
+    autoApplyColors: true,
+    colors: [
+      { hex: "#FF5733", name: "Primary" },
+      { hex: "#33FF57", name: "Secondary" }
+    ]
+  }
+]`,
+    },
+  },
+
+  integration_steps: {
+    classic_cdn: {
+      description: "Classic Editor with CDN (simplest setup)",
+      steps: [
+        "1. Add iframe element with id='dm-iframe' and src='https://embed.dynamicmockups.com'",
+        "2. Add SDK script tag from CDN: https://cdn.jsdelivr.net/npm/@dynamic-mockups/mockup-editor-sdk@latest/dist/index.js",
+        "3. Call DynamicMockups.initDynamicMockupsIframe() after DOMContentLoaded",
+        "4. Pass your x-website-key in the data object",
+      ],
+    },
+    classic_npm: {
+      description: "Classic Editor with NPM (for React, Vue, etc.)",
+      steps: [
+        "1. Install package: npm install @dynamic-mockups/mockup-editor-sdk@latest",
+        "2. Add iframe element with id='dm-iframe' and src='https://embed.dynamicmockups.com'",
+        "3. Import and call initDynamicMockupsIframe() after component mounts",
+        "4. Pass your x-website-key in the data object",
+      ],
+    },
+    mockanything_static: {
+      description: "MockAnything Editor with static iframe (same as Classic but with editorType)",
+      steps: [
+        "1. Add iframe element with id='dm-iframe' and src='https://embed.dynamicmockups.com'",
+        "2. Add SDK script or install NPM package",
+        "3. Call initDynamicMockupsIframe() with editorType: 'mockanything' in data object",
+      ],
+      example: `DynamicMockups.initDynamicMockupsIframe({
+  iframeId: "dm-iframe",
+  data: {
+    "x-website-key": "YOUR_WEBSITE_KEY",
+    editorType: "mockanything",
+    themeAppearance: "dark"
+  },
+  mode: "download"
+});`,
+    },
+    mockanything_api: {
+      description: "MockAnything Editor with API initialization (dynamic, supports prompts)",
+      steps: [
+        "1. Install SDK: npm install @dynamic-mockups/mockup-editor-sdk@latest",
+        "2. IMPORTANT: Expose initDynamicMockupsIframe globally: window.initDynamicMockupsIframe = initDynamicMockupsIframe",
+        "3. Call POST /api/v1/mock-anything/embed/initialize with prompt/image_url/artwork_url",
+        "4. Inject the returned iframe_editor HTML into your DOM",
+        "5. Execute the returned init_function (use eval() or new Function())",
+        "6. Set up window message event listener using the returned event_listener_name",
+      ],
+      critical_note: "You MUST expose initDynamicMockupsIframe globally (step 2) before executing init_function, otherwise the editor won't initialize.",
+    },
+  },
+
+  callback_response: {
+    description: "When mode='custom', the callback receives this data on export",
+    fields: {
+      "mockupsExport[].export_label": "Export identifier/label",
+      "mockupsExport[].export_path": "URL to the rendered mockup image",
+      "customFields": "Your custom fields echoed back",
+    },
+    example: `initDynamicMockupsIframe({
+  iframeId: "dm-iframe",
+  data: {
+    "x-website-key": "YOUR_KEY",
+    customFields: { userId: "123", productId: "456" }
+  },
+  mode: "custom",
+  callback: (callbackData) => {
+    console.log(callbackData.mockupsExport[0].export_path); // Image URL
+    console.log(callbackData.customFields); // { userId: "123", productId: "456" }
+  },
+});`,
+  },
+
+  mockanything_api_integration: {
+    description: "Initialize MockAnything editor dynamically via API (for React, Vue, etc.)",
+    endpoint: "POST https://app.dynamicmockups.com/api/v1/mock-anything/embed/initialize",
+    headers: { "Content-Type": "application/json", "x-api-key": "YOUR_API_KEY" },
+    request_body: {
+      prompt: "Optional. AI prompt to generate initial mockup (e.g., 'A guy wearing a Gildan 5000 in Belgrade')",
+      image_url: "Optional. URL to product image to use as base",
+      artwork_url: "Optional. URL to artwork/logo to pre-load",
+    },
+    response: {
+      iframe_editor: "Complete iframe HTML to inject into DOM",
+      init_function: "JavaScript code to initialize the editor",
+      event_listener_name: "Unique event name for this editor instance",
+    },
+    usage: `// 1. Call API
+const response = await fetch("https://app.dynamicmockups.com/api/v1/mock-anything/embed/initialize", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "x-api-key": "YOUR_API_KEY" },
+  body: JSON.stringify({
+    prompt: "A guy wearing a Gildan 5000 t-shirt",
+    artwork_url: "https://example.com/logo.png"
+  })
+});
+const { data } = await response.json();
+
+// 2. Inject iframe
+document.getElementById("editor-container").innerHTML = data.iframe_editor;
+
+// 3. Initialize editor
+eval(data.init_function);
+
+// 4. Listen for events
+window.addEventListener("message", (event) => {
+  if (event.data.eventListenerName === data.event_listener_name) {
+    console.log("Editor event:", event.data.data);
+  }
+});`,
+  },
+
+  mockanything_events: {
+    description: "Events emitted by MockAnything editor via postMessage",
+    events: ["editor_ready", "export_completed", "photoshoot_completed", "artwork_updated", "variant_changed"],
+    listening: `window.addEventListener("message", (event) => {
+  if (event.data.eventListenerName === "YOUR_EVENT_LISTENER_NAME") {
+    const payload = event.data.data;
+    console.log("Event received:", payload);
+  }
+});`,
+  },
+
+  react_example: `import { useState, useEffect } from "react";
+import { initDynamicMockupsIframe } from "@dynamic-mockups/mockup-editor-sdk";
+
+// Expose globally for iframe communication
+window.initDynamicMockupsIframe = initDynamicMockupsIframe;
+
+export default function MockAnythingEditor() {
+  const [iframeData, setIframeData] = useState({ event_listener_name: "", iframe_editor: "", init_function: "" });
+
+  const launchEditor = async () => {
+    const response = await fetch("https://app.dynamicmockups.com/api/v1/mock-anything/embed/initialize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": "YOUR_API_KEY" },
+      body: JSON.stringify({ prompt: "A person wearing a t-shirt", artwork_url: "https://example.com/logo.png" })
+    });
+    const { data } = await response.json();
+    setIframeData(data);
+    setTimeout(() => eval(data.init_function), 100);
+  };
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.data?.eventListenerName === iframeData.event_listener_name) {
+        console.log("Editor event:", event.data.data);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [iframeData.event_listener_name]);
+
+  return (
+    <div>
+      <button onClick={launchEditor}>Load MockAnything Editor</button>
+      <div dangerouslySetInnerHTML={{ __html: iframeData.iframe_editor }} />
+    </div>
+  );
+}`,
+
+  docs_url: "https://docs.dynamicmockups.com/mockup-editor-sdk",
+};
+
+// =============================================================================
 // Server Initialization
 // =============================================================================
 
@@ -203,6 +487,7 @@ function getApiKey(extra) {
 //
 // WHEN TO USE EACH TOOL:
 // - get_api_info: First call when user asks about limits, pricing, or capabilities
+// - embed_mockup_editor: When user wants to embed the mockup editor in their website/app
 // - get_catalogs: When user wants to see their workspace organization
 // - get_collections: When user wants to browse mockup groups or find mockups by category
 // - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
@@ -247,6 +532,49 @@ This tool does NOT require an API call - returns cached knowledge instantly.`,
           type: "string",
           enum: ["all", "integration", "billing", "rate_limits", "formats", "best_practices", "support"],
           description: "Specific topic to retrieve. Use 'integration' for API integration details (base URL, headers, code examples). Use 'all' for complete knowledge base.",
+        },
+      },
+    },
+  },
+  {
+    name: "embed_mockup_editor",
+    description: `Get comprehensive knowledge for embedding the Dynamic Mockups Editor into websites and apps.
+
+WHEN TO USE: Call this when user asks about:
+- Embedding a mockup editor in their website/app
+- Adding product customization/personalization features
+- Integrating the Classic Editor or MockAnything (AI) Editor
+- iFrame integration for mockup editing
+- Handling editor events and callbacks
+- React/Vue/JavaScript integration examples
+
+TWO EDITOR TYPES:
+1. Classic Editor: Template-based mockups from your catalog
+2. MockAnything Editor: AI-powered - turn any image into a mockup
+
+INTEGRATION APPROACHES:
+- CDN: Quick setup with script tag from jsdelivr
+- NPM: @dynamic-mockups/mockup-editor-sdk package for frameworks
+- API: Dynamic initialization via /mock-anything/embed/initialize endpoint
+
+TOPICS AVAILABLE:
+- quick_start: Basic iframe + SDK setup (CDN method)
+- npm_integration: NPM package installation and usage
+- data_options: All configuration options for customizing editor behavior
+- callback_response: Handling export events when mode="custom"
+- mockanything_api: Dynamic editor initialization via API
+- mockanything_events: Event system for MockAnything editor
+- react_example: Complete React component example
+- all: Complete knowledge base
+
+This tool does NOT require an API call - returns cached knowledge instantly.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        topic: {
+          type: "string",
+          enum: ["all", "quick_start", "npm_integration", "data_options", "callback_response", "mockanything_api", "mockanything_events", "react_example", "editor_types", "specific_mockup", "integration_steps"],
+          description: "Specific topic to retrieve. Use 'quick_start' for basic setup, 'integration_steps' for step-by-step guides, 'data_options' for configuration, 'mockanything_api' for AI editor API integration, 'react_example' for React code. Use 'all' for complete knowledge base.",
         },
       },
     },
@@ -851,7 +1179,7 @@ RETURNS: {uuid, name} of the uploaded PSD file.`,
 
 API: POST /psd/delete
 
-    WHEN TO USE: When user wants to:
+WHEN TO USE: When user wants to:
 - Remove an uploaded PSD file
 - Clean up unused PSD files
 - Optionally remove all mockups derived from the PSD
@@ -894,6 +1222,61 @@ async function handleGetApiInfo(args) {
   };
 
   return ResponseFormatter.ok(topicMap[topic] || API_KNOWLEDGE_BASE);
+}
+
+async function handleGetEmbedEditorInfo(args) {
+  const topic = args?.topic || "all";
+
+  const topicMap = {
+    quick_start: {
+      overview: EMBED_EDITOR_KNOWLEDGE_BASE.overview,
+      quick_start: EMBED_EDITOR_KNOWLEDGE_BASE.quick_start,
+      init_function_params: EMBED_EDITOR_KNOWLEDGE_BASE.init_function_params,
+      integration_steps: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps,
+    },
+    npm_integration: {
+      npm_integration: EMBED_EDITOR_KNOWLEDGE_BASE.npm_integration,
+      init_function_params: EMBED_EDITOR_KNOWLEDGE_BASE.init_function_params,
+      integration_steps: {
+        classic_npm: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps.classic_npm,
+      },
+    },
+    data_options: {
+      data_options: EMBED_EDITOR_KNOWLEDGE_BASE.data_options,
+    },
+    callback_response: {
+      callback_response: EMBED_EDITOR_KNOWLEDGE_BASE.callback_response,
+    },
+    mockanything_api: {
+      mockanything_api_integration: EMBED_EDITOR_KNOWLEDGE_BASE.mockanything_api_integration,
+      mockanything_events: EMBED_EDITOR_KNOWLEDGE_BASE.mockanything_events,
+      integration_steps: {
+        mockanything_static: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps.mockanything_static,
+        mockanything_api: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps.mockanything_api,
+      },
+    },
+    mockanything_events: {
+      mockanything_events: EMBED_EDITOR_KNOWLEDGE_BASE.mockanything_events,
+    },
+    react_example: {
+      react_example: EMBED_EDITOR_KNOWLEDGE_BASE.react_example,
+      integration_steps: {
+        mockanything_api: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps.mockanything_api,
+      },
+    },
+    editor_types: {
+      editor_types: EMBED_EDITOR_KNOWLEDGE_BASE.editor_types,
+    },
+    specific_mockup: {
+      specific_mockup: EMBED_EDITOR_KNOWLEDGE_BASE.specific_mockup,
+    },
+    integration_steps: {
+      integration_steps: EMBED_EDITOR_KNOWLEDGE_BASE.integration_steps,
+    },
+    all: EMBED_EDITOR_KNOWLEDGE_BASE,
+  };
+
+  return ResponseFormatter.ok(topicMap[topic] || EMBED_EDITOR_KNOWLEDGE_BASE);
 }
 
 async function handleGetCatalogs(args, extra) {
@@ -1079,6 +1462,7 @@ async function handleDeletePsd(args, extra) {
 
 const toolHandlers = {
   get_api_info: handleGetApiInfo,
+  embed_mockup_editor: handleGetEmbedEditorInfo,
   get_catalogs: handleGetCatalogs,
   get_collections: handleGetCollections,
   create_collection: handleCreateCollection,

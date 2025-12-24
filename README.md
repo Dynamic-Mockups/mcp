@@ -64,6 +64,7 @@ If you want to connect via HTTP instead of NPX, use:
 | Tool | Description |
 |------|-------------|
 | `get_api_info` | Get API knowledge base (billing, rate limits, formats, best practices, support) |
+| `embed_mockup_editor` | Implement embeddable mockup editor in your app |
 | `get_catalogs` | Retrieve all available catalogs |
 | `get_collections` | Retrieve collections (optionally filter by catalog) |
 | `create_collection` | Create a new collection |
@@ -81,6 +82,7 @@ Ask your AI assistant:
 
 | Use Case | Example Prompt |
 |----------|----------------|
+| Embed editor | "Add the full mockup editor to my web application" |
 | List catalogs | "Get my Dynamic Mockups catalogs" |
 | Browse mockups | "Show me all mockups in my T-shirt collection" |
 | Single render | "Create a mockup render using any T-shirt mockup with my artwork from url: https://example.com/my-design.png" |
@@ -89,54 +91,6 @@ Ask your AI assistant:
 | Upload PSD | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it" |
 | API info | "What are the rate limits and supported file formats for Dynamic Mockups?" |
 | Print files | "Export print-ready files at 300 DPI for my poster mockup" |
-
-## Development
-
-### Local Installation
-
-```bash
-git clone https://github.com/dynamic-mockups/mcp.git
-cd mcp-server
-npm install
-```
-
-### Run Locally (stdio mode - default)
-
-```bash
-DYNAMIC_MOCKUPS_API_KEY=your_key npm start
-```
-
-### Run Locally (HTTP mode)
-
-```bash
-DYNAMIC_MOCKUPS_API_KEY=your_key npm run start:http
-```
-
-### Development Mode (with auto-reload)
-
-```bash
-# stdio mode
-DYNAMIC_MOCKUPS_API_KEY=your_key npm run dev
-
-# HTTP mode
-DYNAMIC_MOCKUPS_API_KEY=your_key npm run dev:http
-```
-
-### Use Local Version in MCP Client
-
-```json
-{
-  "mcpServers": {
-    "dynamic-mockups": {
-      "command": "node",
-      "args": ["/path/to/mcp-server/src/index.js"],
-      "env": {
-        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
 
 ## Error Handling
 
