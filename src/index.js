@@ -29,6 +29,9 @@ const API_KEY = process.env.DYNAMIC_MOCKUPS_API_KEY;
 const SERVER_NAME = "dynamic-mockups-mcp";
 const SERVER_VERSION = "1.0.0";
 
+// Transport mode tracking (set during server startup)
+let currentTransportMode = "stdio";
+
 // =============================================================================
 // API Knowledge Base
 // =============================================================================
@@ -408,19 +411,71 @@ const server = new Server(
 // =============================================================================
 
 /**
+ * Returns MCP tracking headers for API requests.
+ * @param {string} toolName - The name of the MCP tool being called
+ * @returns {Object} Headers object with tracking information
+ */
+function getMcpTrackingHeaders(toolName) {
+  return {
+    "x-mcp-server": "true",
+    "x-mcp-tool": toolName,
+    "x-mcp-transport-mode": currentTransportMode,
+  };
+}
+
+/**
+ * Tracks MCP tool usage by sending event to /mcp/track endpoint (fire and forget).
+ * Called after every tool execution with success/error status.
+ *
+ * @param {string} toolName - The name of the MCP tool
+ * @param {string} apiKey - The API key for the request
+ * @param {Object} result - The tool execution result
+ * @param {boolean} result.success - Whether the tool executed successfully
+ * @param {string|null} result.error - Error message if failed, null otherwise
+ */
+function trackToolUsage(toolName, apiKey, { success, error }) {
+  if (!apiKey) return; // Skip tracking if no API key
+
+  try {
+    // Fire and forget - don't await or handle errors
+    axios.post(
+        `${API_BASE_URL}/mcp/track`,
+        {
+          tool: toolName,
+          success,
+          error: error || null,
+        },
+        {
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            ...getMcpTrackingHeaders(toolName),
+          },
+          timeout: 5000, // Short timeout for tracking
+        }
+    ).catch(() => {}); // Silently ignore errors
+  } catch {
+    // Silently ignore any errors - tracking should never break functionality
+  }
+}
+
+/**
  * Creates an API client with the provided API key.
  * For stdio transport: uses environment variable
  * For HTTP transport: uses client-provided API key from Authorization header
  *
  * @param {string} apiKey - The API key to use for requests
+ * @param {string} toolName - The name of the MCP tool (for tracking)
  */
-function createApiClient(apiKey) {
+function createApiClient(apiKey, toolName) {
   return axios.create({
     baseURL: API_BASE_URL,
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
       "x-api-key": apiKey || "",
+      ...getMcpTrackingHeaders(toolName),
     },
     timeout: 60000, // 60 second timeout for render operations
     validateStatus: (status) => status < 500, // Only throw on 5xx errors
@@ -1285,7 +1340,7 @@ async function handleGetCatalogs(args, extra) {
   if (error) return error;
 
   try {
-    const response = await createApiClient(apiKey).get("/catalogs");
+    const response = await createApiClient(apiKey, "get_catalogs").get("/catalogs");
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get catalogs");
@@ -1304,7 +1359,7 @@ async function handleGetCollections(args = {}, extra) {
       params.append("include_all_catalogs", args.include_all_catalogs);
     }
 
-    const response = await createApiClient(apiKey).get(`/collections?${params}`);
+    const response = await createApiClient(apiKey, "get_collections").get(`/collections?${params}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get collections");
@@ -1320,7 +1375,7 @@ async function handleCreateCollection(args, extra) {
     const payload = { name: args.name };
     if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
 
-    const response = await createApiClient(apiKey).post("/collections", payload);
+    const response = await createApiClient(apiKey, "create_collection").post("/collections", payload);
     return ResponseFormatter.fromApiResponse(response, `Collection "${args.name}" created`);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create collection");
@@ -1341,7 +1396,7 @@ async function handleGetMockups(args = {}, extra) {
     }
     if (args.name) params.append("name", args.name);
 
-    const response = await createApiClient(apiKey).get(`/mockups?${params}`);
+    const response = await createApiClient(apiKey, "get_mockups").get(`/mockups?${params}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get mockups");
@@ -1354,7 +1409,7 @@ async function handleGetMockupByUuid(args, extra) {
   if (error) return error;
 
   try {
-    const response = await createApiClient(apiKey).get(`/mockup/${args.uuid}`);
+    const response = await createApiClient(apiKey, "get_mockup_by_uuid").get(`/mockup/${args.uuid}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get mockup");
@@ -1375,7 +1430,7 @@ async function handleCreateRender(args, extra) {
     if (args.export_options) payload.export_options = args.export_options;
     if (args.text_layers) payload.text_layers = args.text_layers;
 
-    const response = await createApiClient(apiKey).post("/renders", payload);
+    const response = await createApiClient(apiKey, "create_render").post("/renders", payload);
     return ResponseFormatter.fromApiResponse(response, "Render created (1 credit used)");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create render");
@@ -1391,7 +1446,7 @@ async function handleCreateBatchRender(args, extra) {
     const payload = { renders: args.renders };
     if (args.export_options) payload.export_options = args.export_options;
 
-    const response = await createApiClient(apiKey).post("/renders/batch", payload);
+    const response = await createApiClient(apiKey, "create_batch_render").post("/renders/batch", payload);
     const count = args.renders?.length || 0;
     return ResponseFormatter.fromApiResponse(response, `Batch render complete (${count} credits used)`);
   } catch (err) {
@@ -1413,7 +1468,7 @@ async function handleExportPrintFiles(args, extra) {
     if (args.export_options) payload.export_options = args.export_options;
     if (args.text_layers) payload.text_layers = args.text_layers;
 
-    const response = await createApiClient(apiKey).post("/renders/print-files", payload);
+    const response = await createApiClient(apiKey, "export_print_files").post("/renders/print-files", payload);
     return ResponseFormatter.fromApiResponse(response, "Print files exported");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to export print files");
@@ -1431,7 +1486,7 @@ async function handleUploadPsd(args, extra) {
     if (args.psd_category_id) payload.psd_category_id = args.psd_category_id;
     if (args.mockup_template) payload.mockup_template = args.mockup_template;
 
-    const response = await createApiClient(apiKey).post("/psd/upload", payload);
+    const response = await createApiClient(apiKey, "upload_psd").post("/psd/upload", payload);
     return ResponseFormatter.fromApiResponse(response, "PSD uploaded successfully");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to upload PSD");
@@ -1449,7 +1504,7 @@ async function handleDeletePsd(args, extra) {
       payload.delete_related_mockups = args.delete_related_mockups;
     }
 
-    const response = await createApiClient(apiKey).post("/psd/delete", payload);
+    const response = await createApiClient(apiKey, "delete_psd").post("/psd/delete", payload);
     return ResponseFormatter.fromApiResponse(response, "PSD deleted successfully");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to delete PSD");
@@ -1483,17 +1538,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
+  const apiKey = getApiKey(extra);
 
   const handler = toolHandlers[name];
   if (!handler) {
-    return ResponseFormatter.error(`Unknown tool: ${name}`);
+    const result = ResponseFormatter.error(`Unknown tool: ${name}`);
+    trackToolUsage(name, apiKey, { success: false, error: `Unknown tool: ${name}` });
+    return result;
   }
 
   try {
     // Pass extra context (contains requestInfo with headers for HTTP transport)
-    return await handler(args || {}, extra);
+    const result = await handler(args || {}, extra);
+
+    // Track tool usage (fire and forget)
+    const isError = result.isError || false;
+    const errorMessage = isError && result.content?.[0]?.text ? result.content[0].text : null;
+    trackToolUsage(name, apiKey, { success: !isError, error: errorMessage });
+
+    return result;
   } catch (err) {
-    return ResponseFormatter.fromError(err, `Error executing ${name}`);
+    const result = ResponseFormatter.fromError(err, `Error executing ${name}`);
+    trackToolUsage(name, apiKey, { success: false, error: err.message || `Error executing ${name}` });
+    return result;
   }
 });
 
@@ -1506,6 +1573,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
  * Used by: Claude Desktop, Claude Code, Cursor, Windsurf
  */
 async function startStdioServer() {
+  currentTransportMode = "stdio";
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`Dynamic Mockups MCP Server v${SERVER_VERSION} running (stdio)`);
@@ -1525,6 +1593,8 @@ async function startStdioServer() {
  * @returns {Promise<{app: Express, httpServer: Server}>}
  */
 async function startHttpServer(options = {}) {
+  currentTransportMode = "http";
+
   const {
     port = process.env.PORT || 3000,
     host = process.env.HOST || "0.0.0.0",
@@ -1606,15 +1676,29 @@ async function startHttpServer(options = {}) {
       connectionServer.setRequestHandler(ListToolsRequestSchema, async () => ({ tools }));
       connectionServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         const { name, arguments: args } = request.params;
+        const apiKey = getApiKey(extra);
+
         const handler = toolHandlers[name];
         if (!handler) {
-          return ResponseFormatter.error(`Unknown tool: ${name}`);
+          const result = ResponseFormatter.error(`Unknown tool: ${name}`);
+          trackToolUsage(name, apiKey, { success: false, error: `Unknown tool: ${name}` });
+          return result;
         }
+
         try {
           // Pass extra context (contains requestInfo with headers for API key extraction)
-          return await handler(args || {}, extra);
+          const result = await handler(args || {}, extra);
+
+          // Track tool usage (fire and forget)
+          const isError = result.isError || false;
+          const errorMessage = isError && result.content?.[0]?.text ? result.content[0].text : null;
+          trackToolUsage(name, apiKey, { success: !isError, error: errorMessage });
+
+          return result;
         } catch (err) {
-          return ResponseFormatter.fromError(err, `Error executing ${name}`);
+          const result = ResponseFormatter.fromError(err, `Error executing ${name}`);
+          trackToolUsage(name, apiKey, { success: false, error: err.message || `Error executing ${name}` });
+          return result;
         }
       });
 
