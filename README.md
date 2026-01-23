@@ -13,15 +13,15 @@ Add the following to your MCP client configuration file:
 
 ```json
 {
-   "mcpServers": {
-      "dynamic-mockups": {
-         "command": "npx",
-         "args": ["-y", "@dynamic-mockups/mcp"],
-         "env": {
-            "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
-         }
+  "mcpServers": {
+    "dynamic-mockups": {
+      "command": "npx",
+      "args": ["-y", "@dynamic-mockups/mcp"],
+      "env": {
+        "DYNAMIC_MOCKUPS_API_KEY": "your_api_key_here"
       }
-   }
+    }
+  }
 }
 ```
 
@@ -37,15 +37,15 @@ If you want to connect via HTTP instead of NPX, use:
 
 ```json
 {
-   "mcpServers": {
-      "dynamic-mockups": {
-         "type": "http",
-         "url": "https://mcp.dynamicmockups.com",
-         "headers": {
-            "x-api-key": "your_api_key_here"
-         }
+  "mcpServers": {
+    "dynamic-mockups": {
+      "type": "http",
+      "url": "https://mcp.dynamicmockups.com",
+      "headers": {
+        "x-api-key": "your_api_key_here"
       }
-   }
+    }
+  }
 }
 ```
 
@@ -75,6 +75,7 @@ If you want to connect via HTTP instead of NPX, use:
 | `export_print_files` | Export high-resolution print files for production |
 | `upload_psd` | Upload a PSD file and optionally create a mockup template |
 | `delete_psd` | Delete a PSD file with optional related mockups deletion |
+| `tool_create_embroidery_effect` | Transform any image into a realistic embroidery/stitched effect |
 
 ## Usage Examples
 
@@ -91,6 +92,7 @@ Ask your AI assistant:
 | Upload PSD | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it" |
 | API info | "What are the rate limits and supported file formats for Dynamic Mockups?" |
 | Print files | "Export print-ready files at 300 DPI for my poster mockup" |
+| Embroidery effect | "Transform my logo into an embroidery effect from url: https://example.com/my-logo.png" |
 
 ## Error Handling
 

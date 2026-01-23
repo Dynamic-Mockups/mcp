@@ -553,6 +553,7 @@ function getApiKey(extra) {
 // - upload_psd: When user wants to add their own PSD mockup template
 // - delete_psd: When user wants to remove an uploaded PSD
 // - create_collection: When user wants to organize mockups into groups
+// - tool_create_embroidery_effect: When user wants to transform an image into embroidery/stitched effect
 //
 // =============================================================================
 
@@ -1234,7 +1235,7 @@ RETURNS: {uuid, name} of the uploaded PSD file.`,
 
 API: POST /psd/delete
 
-WHEN TO USE: When user wants to:
+    WHEN TO USE: When user wants to:
 - Remove an uploaded PSD file
 - Clean up unused PSD files
 - Optionally remove all mockups derived from the PSD
@@ -1255,6 +1256,48 @@ RETURNS: Success confirmation message.`,
         },
       },
       required: ["psd_uuid"],
+    },
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // EFFECT TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    name: "tool_create_embroidery_effect",
+    description: `Transform any image into a realistic embroidery/stitched effect.
+
+API: POST /tools/embroidery
+COST: 6 credits per request
+
+WHEN TO USE: When user wants to:
+- Convert artwork/designs into embroidery style
+- Create stitched/embroidered versions of logos or images
+- Prepare designs for print-on-demand embroidery products
+- Transform existing artwork to look like embroidery before rendering on mockups
+
+INPUT: Provide image via EITHER:
+- image_url: Public URL to the image (PNG, JPG, WEBP supported)
+- image_data_b64: Base64-encoded image data
+Only ONE input method is required per request.
+
+TIPS FOR BEST RESULTS:
+- Use high-contrast images with clean edges
+- Simpler designs with fewer colors produce more realistic embroidery effects
+- The output can be used directly in mockup renders or saved to asset library
+
+RETURNS: {export_path} - URL to the generated embroidery image (temporary, should be downloaded or saved to permanent storage).`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        image_url: {
+          type: "string",
+          description: "Public URL to the image to transform. Supported formats: PNG, JPG, WEBP. Either image_url OR image_data_b64 must be provided.",
+        },
+        image_data_b64: {
+          type: "string",
+          description: "Base64-encoded image data. Either image_url OR image_data_b64 must be provided.",
+        },
+      },
     },
   },
 ];
@@ -1511,6 +1554,31 @@ async function handleDeletePsd(args, extra) {
   }
 }
 
+async function handleCreateEmbroideryEffect(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  // Validate that at least one input method is provided
+  if (!args.image_url && !args.image_data_b64) {
+    return ResponseFormatter.error(
+        "Missing required input",
+        { solution: "Provide either image_url (public URL) or image_data_b64 (base64-encoded image data)." }
+    );
+  }
+
+  try {
+    const payload = {};
+    if (args.image_url) payload.image_url = args.image_url;
+    if (args.image_data_b64) payload.image_data_b64 = args.image_data_b64;
+
+    const response = await createApiClient(apiKey, "tool_create_embroidery_effect").post("/tools/embroidery", payload);
+    return ResponseFormatter.fromApiResponse(response, "Embroidery effect created (6 credits used)");
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to create embroidery effect");
+  }
+}
+
 // =============================================================================
 // Tool Router
 // =============================================================================
@@ -1528,6 +1596,7 @@ const toolHandlers = {
   export_print_files: handleExportPrintFiles,
   upload_psd: handleUploadPsd,
   delete_psd: handleDeletePsd,
+  tool_create_embroidery_effect: handleCreateEmbroideryEffect,
 };
 
 // =============================================================================
