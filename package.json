@@ -35,8 +35,8 @@
     "url": "https://github.com/dynamic-mockups/mcp/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "axios": "^1.6.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "axios": "^1.15.2",
     "cors": "^2.8.5",
     "express": "^4.21.0"
   },

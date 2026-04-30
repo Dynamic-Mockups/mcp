@@ -540,6 +540,12 @@ function getApiKey(extra) {
 // 2. Use create_render (single) or create_batch_render (multiple) to generate images
 // Note: get_mockups returns all data needed to render - no need to call get_mockup_by_uuid first!
 //
+// WORKFLOW FOR CREATING NEW MOCKUPS WITH AI (MockAnything):
+// 1. (Optional) Call search_products to find a POD product UUID for grounding
+// 2. Call create_mockanything_mockup with prompt or image_url -> returns task_id
+// 3. Poll get_mockanything_status with task_id until state=SUCCESS -> returns mockup payload
+// 4. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
+//
 // WHEN TO USE EACH TOOL:
 // - get_api_info: First call when user asks about limits, pricing, or capabilities
 // - embed_mockup_editor: When user wants to embed the mockup editor in their website/app
@@ -547,6 +553,9 @@ function getApiKey(extra) {
 // - get_collections: When user wants to browse mockup groups or find mockups by category
 // - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
 // - get_mockup_by_uuid: Only when user needs ONE specific template (already has UUID)
+// - search_products: Find a POD product UUID to ground MockAnything AI generations
+// - create_mockanything_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
+// - get_mockanything_status: Poll a MockAnything task until the mockup is ready for rendering
 // - create_render: For generating 1 mockup image
 // - create_batch_render: For generating 2+ mockup images (more efficient)
 // - export_print_files: When user needs production-ready files with specific DPI
@@ -787,6 +796,167 @@ RETURNS: Single mockup with:
         },
       },
       required: ["uuid"],
+    },
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MOCKANYTHING AI TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    name: "search_products",
+    description: `Search the Print-on-Demand (POD) product catalog used to ground MockAnything AI generations.
+
+API: GET /mock-anything/products
+
+WHEN TO USE: When user wants to anchor an AI-generated mockup around a specific product (e.g., "Gildan 5000 t-shirt", "ceramic mug") instead of letting the model pick a generic one.
+
+WORKFLOW:
+1. Call this tool with a search term (matched against POD product names)
+2. Pick the desired product from the response
+3. Pass its uuid as product.uuid when calling create_mockanything_mockup
+
+NOTE: Grounding is OPTIONAL. Skip this tool if you want the AI to compose freely from the prompt alone.
+
+RETURNS: Array of {name, uuid} POD product entries matching the query.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "REQUIRED. Search term matched against POD product names (e.g., 'gildan', 'mug', 'hoodie'). Must be non-empty.",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "create_mockanything_mockup",
+    description: `Create a new MockAnything AI mockup template on the fly. The resulting mockup behaves exactly like one returned by get_mockups - pass its uuid to create_render to print artwork on it.
+
+API: POST /mock-anything/create
+COST:
+- prompt flow: 5 credits (seedream_4_0, default), 6 credits (seedream_4_5), 14 credits (nano_banana_2). Charged on SUCCESS, free on FAILURE.
+- image_url flow: 4 credits per generation.
+
+WHEN TO USE: When user wants to:
+- Generate a brand-new mockup from a text prompt (e.g., "a person wearing a t-shirt in Tokyo")
+- Convert an existing public image URL into a usable mockup template
+- Create custom mockups not available in their existing template catalog
+
+EXACTLY ONE of these must be provided:
+- prompt: text used to AI-generate the mockup image. Asynchronous - returns task_id to poll.
+- image_url: public URL to an existing image. The task usually completes on the first status poll.
+
+WORKFLOW:
+1. (Optional) Call search_products to find a product UUID for grounding the AI
+2. Call this tool with prompt OR image_url
+3. Use the returned task_id with get_mockanything_status, polling every ~2 seconds until state=SUCCESS
+4. Use the returned mockup.uuid as mockup_uuid in create_render
+
+MODELS (only apply to the prompt flow):
+- seedream_4_0 (default, 5 credits, ~20s, medium quality) - quick iterations
+- seedream_4_5 (6 credits, ~40s, good quality) - higher fidelity without the pro price
+- nano_banana_2 (14 credits, ~30s, high quality) - production-ready final mockups
+
+NOTES:
+- product.uuid, model, and enhance_prompt only apply to the prompt flow (ignored otherwise).
+- collections accepts existing collections (by uuid) or new ones (by name, find-or-create).
+- Rate limit: 50 requests/minute on this endpoint.
+- File uploads (multipart image_file) are not supported via MCP - host the image and pass image_url.
+
+RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the task succeeds.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        prompt: {
+          type: "string",
+          description: "Text prompt used to AI-generate the mockup image. Required unless image_url is provided. Triggers asynchronous generation - poll status with the returned task_id.",
+        },
+        image_url: {
+          type: "string",
+          description: "Public URL of an existing image to use as the mockup. Required unless prompt is provided. Completes on the first status poll.",
+        },
+        enhance_prompt: {
+          type: "boolean",
+          description: "Optional. Run prompt enhancement before generation. Only applies to the prompt flow.",
+        },
+        product: {
+          type: "object",
+          description: "Optional. Product context used to ground the AI generation around a specific POD product type. Only applies to the prompt flow.",
+          properties: {
+            uuid: {
+              type: "string",
+              description: "POD product UUID. Get from search_products.",
+            },
+          },
+        },
+        model: {
+          type: "string",
+          enum: ["seedream_4_0", "seedream_4_5", "nano_banana_2"],
+          description: "Optional. AI model used for generation. Default: seedream_4_0. Only applies to the prompt flow.",
+        },
+        name: {
+          type: "string",
+          description: "Optional. Mockup name shown in the dashboard (max 255 chars). Defaults to the prompt or a generic fallback.",
+        },
+        collections: {
+          type: "array",
+          description: "Optional. Collections to attach the mockup to. Each item must have either uuid (existing collection) or name (new collection - find-or-create).",
+          items: {
+            type: "object",
+            properties: {
+              uuid: {
+                type: "string",
+                description: "UUID of an existing collection.",
+              },
+              name: {
+                type: "string",
+                description: "Name of a new collection to create and attach (max 255 chars).",
+              },
+            },
+          },
+        },
+        catalog_uuid: {
+          type: "string",
+          description: "Optional. UUID of the catalog to place the mockup in. Defaults to the workspace's default catalog.",
+        },
+      },
+    },
+  },
+  {
+    name: "get_mockanything_status",
+    description: `Poll the status of a MockAnything AI mockup creation task.
+
+API: GET /mock-anything/status/{taskId}
+
+WHEN TO USE: After calling create_mockanything_mockup, use this to track progress until the mockup is ready for rendering.
+
+POLLING STRATEGY:
+- Poll every ~2 seconds (recommended)
+- prompt flow: AI generations typically finish in 10-30 seconds
+- image_url flow: usually ready on the very first status call
+
+STATES:
+- PROGRESS / PENDING: Task is still running. image_url and mockup are null. Poll again shortly.
+- SUCCESS: Task complete. image_url is populated and mockup contains everything needed for create_render.
+- FAILURE: Task terminated without producing a mockup. No credits are charged.
+
+ON SUCCESS - the mockup field has the same shape as a get_mockups entry (with type "mockanything"):
+- mockup.uuid: pass as mockup_uuid in create_render
+- mockup.smart_objects[].uuid: pass as smart_objects[].uuid in create_render to place artwork on each detected print area
+
+From here, render the mockup exactly like a classic one - the Render API handles both types through the same endpoint.
+
+RETURNS: {task_id, state, image_url, status, mockup}.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: {
+          type: "string",
+          description: "REQUIRED. The task_id returned from create_mockanything_mockup.",
+        },
+      },
+      required: ["task_id"],
     },
   },
 
@@ -1235,7 +1405,7 @@ RETURNS: {uuid, name} of the uploaded PSD file.`,
 
 API: POST /psd/delete
 
-    WHEN TO USE: When user wants to:
+WHEN TO USE: When user wants to:
 - Remove an uploaded PSD file
 - Clean up unused PSD files
 - Optionally remove all mockups derived from the PSD
@@ -1579,6 +1749,93 @@ async function handleCreateEmbroideryEffect(args, extra) {
   }
 }
 
+async function handleSearchMockanythingProducts(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  if (!args.query || !String(args.query).trim()) {
+    return ResponseFormatter.error(
+        "Missing required parameter",
+        { solution: "Provide a non-empty query string to search POD product names." }
+    );
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.append("query", args.query);
+
+    const response = await createApiClient(apiKey, "search_products").get(`/mock-anything/products?${params}`);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to search MockAnything products");
+  }
+}
+
+async function handleCreateMockanythingMockup(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  const hasPrompt = !!args.prompt;
+  const hasImageUrl = !!args.image_url;
+
+  if (!hasPrompt && !hasImageUrl) {
+    return ResponseFormatter.error(
+        "Missing required input",
+        { solution: "Provide exactly one of prompt (for AI generation) or image_url (for an existing image)." }
+    );
+  }
+  if (hasPrompt && hasImageUrl) {
+    return ResponseFormatter.error(
+        "Conflicting inputs",
+        { solution: "Provide exactly one of prompt or image_url, not both." }
+    );
+  }
+
+  try {
+    const payload = {};
+    if (hasPrompt) payload.prompt = args.prompt;
+    if (hasImageUrl) payload.image_url = args.image_url;
+    if (args.enhance_prompt !== undefined) payload.enhance_prompt = args.enhance_prompt;
+    if (args.product) payload.product = args.product;
+    if (args.model) payload.model = args.model;
+    if (args.name) payload.name = args.name;
+    if (args.collections) payload.collections = args.collections;
+    if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
+
+    const response = await createApiClient(apiKey, "create_mockanything_mockup").post("/mock-anything/create", payload);
+
+    const successMessage = hasPrompt
+        ? "MockAnything AI generation started. Poll get_mockanything_status with the returned task_id (every ~2s) until state=SUCCESS, then use mockup.uuid in create_render."
+        : "MockAnything mockup creation started from image_url. Poll get_mockanything_status with the returned task_id - it usually completes on the first call.";
+
+    return ResponseFormatter.fromApiResponse(response, successMessage);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to create MockAnything mockup");
+  }
+}
+
+async function handleGetMockanythingStatus(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  if (!args.task_id) {
+    return ResponseFormatter.error(
+        "Missing required parameter",
+        { solution: "Provide the task_id returned from create_mockanything_mockup." }
+    );
+  }
+
+  try {
+    const response = await createApiClient(apiKey, "get_mockanything_status").get(`/mock-anything/status/${args.task_id}`);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to get MockAnything mockup status");
+  }
+}
+
 // =============================================================================
 // Tool Router
 // =============================================================================
@@ -1591,6 +1848,9 @@ const toolHandlers = {
   create_collection: handleCreateCollection,
   get_mockups: handleGetMockups,
   get_mockup_by_uuid: handleGetMockupByUuid,
+  search_products: handleSearchMockanythingProducts,
+  create_mockanything_mockup: handleCreateMockanythingMockup,
+  get_mockanything_status: handleGetMockanythingStatus,
   create_render: handleCreateRender,
   create_batch_render: handleCreateBatchRender,
   export_print_files: handleExportPrintFiles,

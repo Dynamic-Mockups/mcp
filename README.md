@@ -70,6 +70,9 @@ If you want to connect via HTTP instead of NPX, use:
 | `create_collection` | Create a new collection |
 | `get_mockups` | Get list of available mockups with optional filters |
 | `get_mockup_by_uuid` | Retrieve a specific mockup by UUID |
+| `search_products` | Search the POD product catalog used to ground MockAnything AI generations |
+| `create_mockanything_mockup` | Create a new MockAnything AI mockup template from a prompt or image URL |
+| `get_mockanything_status` | Poll the status of a MockAnything AI mockup creation task |
 | `create_render` | Create a single mockup render with design assets (1 credit) |
 | `create_batch_render` | Render multiple mockups in one request (1 credit per image) |
 | `export_print_files` | Export high-resolution print files for production |
@@ -81,18 +84,20 @@ If you want to connect via HTTP instead of NPX, use:
 
 Ask your AI assistant:
 
-| Use Case | Example Prompt |
-|----------|----------------|
-| Embed editor | "Add the full mockup editor to my web application" |
-| List catalogs | "Get my Dynamic Mockups catalogs" |
-| Browse mockups | "Show me all mockups in my T-shirt collection" |
-| Single render | "Create a mockup render using any T-shirt mockup with my artwork from url: https://example.com/my-design.png" |
-| Batch render | "Render my artwork from url: https://example.com/my-design.png on all mockups in the Winter T-shirt collection" |
-| Create collection | "Create a new collection called Summer 2025 Hoodies" |
-| Upload PSD | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it" |
-| API info | "What are the rate limits and supported file formats for Dynamic Mockups?" |
-| Print files | "Export print-ready files at 300 DPI for my poster mockup" |
-| Embroidery effect | "Transform my logo into an embroidery effect from url: https://example.com/my-logo.png" |
+| Use Case                       | Example Prompt                                                                                                                              |
+|--------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| Embed editor                   | "Add the full mockup editor to my web application"                                                                                          |
+| List catalogs                  | "Get my Dynamic Mockups catalogs"                                                                                                           |
+| Browse mockups                 | "Show me all mockups in my T-shirt collection"                                                                                              |
+| Single render                  | "Create a mockup render using any T-shirt mockup with my artwork from url: https://example.com/my-design.png"                               |
+| Batch render                   | "Render my artwork from url: https://example.com/my-design.png on all mockups in the Winter T-shirt collection"                             |
+| Create collection              | "Create a new collection called Summer 2025 Hoodies"                                                                                        |
+| Upload PSD                     | "Upload my PSD mockup from url: https://example.com/my-mockup.psd and create a template from it"                                            |
+| API info                       | "What are the rate limits and supported file formats for Dynamic Mockups?"                                                                  |
+| Print files                    | "Export print-ready files at 300 DPI for my poster mockup"                                                                                  |
+| Embroidery effect              | "Transform my logo into an embroidery effect from url: https://example.com/my-logo.png"                                                     |
+| Create a Mockup from Prompt    | "Create a mockup of a guy wearing a Gildan 5000 t-shirt while running, then render my logo from url: https://example.com/my-logo.png on it" |
+| Create a Mockup from Image URL | "Turn this product photo into a mockup: https://example.com/product.jpg, and render my artwork on it"                                       |
 
 ## Error Handling
 
