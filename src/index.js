@@ -542,8 +542,8 @@ function getApiKey(extra) {
 //
 // WORKFLOW FOR CREATING NEW MOCKUPS WITH AI (MockAnything):
 // 1. (Optional) Call search_products to find a POD product UUID for grounding
-// 2. Call create_mockanything_mockup with prompt or image_url -> returns task_id
-// 3. Poll get_mockanything_status with task_id until state=SUCCESS -> returns mockup payload
+// 2. Call create_mockup with prompt or image_url -> returns task_id
+// 3. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload
 // 4. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
 //
 // WHEN TO USE EACH TOOL:
@@ -554,8 +554,8 @@ function getApiKey(extra) {
 // - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
 // - get_mockup_by_uuid: Only when user needs ONE specific template (already has UUID)
 // - search_products: Find a POD product UUID to ground MockAnything AI generations
-// - create_mockanything_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
-// - get_mockanything_status: Poll a MockAnything task until the mockup is ready for rendering
+// - create_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
+// - get_mockup_creation_status: Poll a MockAnything task until the mockup is ready for rendering
 // - create_render: For generating 1 mockup image
 // - create_batch_render: For generating 2+ mockup images (more efficient)
 // - export_print_files: When user needs production-ready files with specific DPI
@@ -813,7 +813,7 @@ WHEN TO USE: When user wants to anchor an AI-generated mockup around a specific 
 WORKFLOW:
 1. Call this tool with a search term (matched against POD product names)
 2. Pick the desired product from the response
-3. Pass its uuid as product.uuid when calling create_mockanything_mockup
+3. Pass its uuid as product.uuid when calling create_mockup
 
 NOTE: Grounding is OPTIONAL. Skip this tool if you want the AI to compose freely from the prompt alone.
 
@@ -830,7 +830,7 @@ RETURNS: Array of {name, uuid} POD product entries matching the query.`,
     },
   },
   {
-    name: "create_mockanything_mockup",
+    name: "create_mockup",
     description: `Create a new MockAnything AI mockup template on the fly. The resulting mockup behaves exactly like one returned by get_mockups - pass its uuid to create_render to print artwork on it.
 
 API: POST /mock-anything/create
@@ -850,7 +850,7 @@ EXACTLY ONE of these must be provided:
 WORKFLOW:
 1. (Optional) Call search_products to find a product UUID for grounding the AI
 2. Call this tool with prompt OR image_url
-3. Use the returned task_id with get_mockanything_status, polling every ~2 seconds until state=SUCCESS
+3. Use the returned task_id with get_mockup_creation_status, polling every ~2 seconds until state=SUCCESS
 4. Use the returned mockup.uuid as mockup_uuid in create_render
 
 MODELS (only apply to the prompt flow):
@@ -924,12 +924,12 @@ RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the t
     },
   },
   {
-    name: "get_mockanything_status",
+    name: "get_mockup_creation_status",
     description: `Poll the status of a MockAnything AI mockup creation task.
 
 API: GET /mock-anything/status/{taskId}
 
-WHEN TO USE: After calling create_mockanything_mockup, use this to track progress until the mockup is ready for rendering.
+WHEN TO USE: After calling create_mockup, use this to track progress until the mockup is ready for rendering.
 
 POLLING STRATEGY:
 - Poll every ~2 seconds (recommended)
@@ -953,7 +953,7 @@ RETURNS: {task_id, state, image_url, status, mockup}.`,
       properties: {
         task_id: {
           type: "string",
-          description: "REQUIRED. The task_id returned from create_mockanything_mockup.",
+          description: "REQUIRED. The task_id returned from create_mockup.",
         },
       },
       required: ["task_id"],
@@ -1804,11 +1804,11 @@ async function handleCreateMockanythingMockup(args, extra) {
     if (args.collections) payload.collections = args.collections;
     if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
 
-    const response = await createApiClient(apiKey, "create_mockanything_mockup").post("/mock-anything/create", payload);
+    const response = await createApiClient(apiKey, "create_mockup").post("/mock-anything/create", payload);
 
     const successMessage = hasPrompt
-        ? "MockAnything AI generation started. Poll get_mockanything_status with the returned task_id (every ~2s) until state=SUCCESS, then use mockup.uuid in create_render."
-        : "MockAnything mockup creation started from image_url. Poll get_mockanything_status with the returned task_id - it usually completes on the first call.";
+        ? "MockAnything AI generation started. Poll get_mockup_creation_status with the returned task_id (every ~2s) until state=SUCCESS, then use mockup.uuid in create_render."
+        : "MockAnything mockup creation started from image_url. Poll get_mockup_creation_status with the returned task_id - it usually completes on the first call.";
 
     return ResponseFormatter.fromApiResponse(response, successMessage);
   } catch (err) {
@@ -1824,12 +1824,12 @@ async function handleGetMockanythingStatus(args, extra) {
   if (!args.task_id) {
     return ResponseFormatter.error(
         "Missing required parameter",
-        { solution: "Provide the task_id returned from create_mockanything_mockup." }
+        { solution: "Provide the task_id returned from create_mockup." }
     );
   }
 
   try {
-    const response = await createApiClient(apiKey, "get_mockanything_status").get(`/mock-anything/status/${args.task_id}`);
+    const response = await createApiClient(apiKey, "get_mockup_creation_status").get(`/mock-anything/status/${args.task_id}`);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get MockAnything mockup status");
@@ -1849,8 +1849,8 @@ const toolHandlers = {
   get_mockups: handleGetMockups,
   get_mockup_by_uuid: handleGetMockupByUuid,
   search_products: handleSearchMockanythingProducts,
-  create_mockanything_mockup: handleCreateMockanythingMockup,
-  get_mockanything_status: handleGetMockanythingStatus,
+  create_mockup: handleCreateMockanythingMockup,
+  get_mockup_creation_status: handleGetMockanythingStatus,
   create_render: handleCreateRender,
   create_batch_render: handleCreateBatchRender,
   export_print_files: handleExportPrintFiles,
