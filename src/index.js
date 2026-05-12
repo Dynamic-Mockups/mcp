@@ -1149,7 +1149,7 @@ Use cases:
 
 PREREQUISITES: Call get_mockups first - it returns both mockup_uuid AND smart_object uuids for all templates.
 
-RETURNS: {total_renders, successful_renders, failed_renders, renders[]} where each render has {status, export_path, export_label, mockup_uuid}.`,
+RETURNS: {total_renders, successful_renders, failed_renders, renders[]} where each render has {status, export_path, export_label, mockup_uuid, mockup_type}.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -1644,6 +1644,7 @@ async function handleCreateRender(args, extra) {
     if (args.text_layers) payload.text_layers = args.text_layers;
 
     const response = await createApiClient(apiKey, "create_render").post("/renders", payload);
+    if (response.data?.data) response.data = response.data.data;
     return ResponseFormatter.fromApiResponse(response, "Render created (1 credit used)");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create render");
@@ -1660,6 +1661,7 @@ async function handleCreateBatchRender(args, extra) {
     if (args.export_options) payload.export_options = args.export_options;
 
     const response = await createApiClient(apiKey, "create_batch_render").post("/renders/batch", payload);
+    if (response.data?.data) response.data = response.data.data;
     const count = args.renders?.length || 0;
     return ResponseFormatter.fromApiResponse(response, `Batch render complete (${count} credits used)`);
   } catch (err) {
