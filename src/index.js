@@ -542,9 +542,10 @@ function getApiKey(extra) {
 //
 // WORKFLOW FOR CREATING NEW MOCKUPS WITH AI (MockAnything):
 // 1. (Optional) Call search_products to find a POD product UUID for grounding
-// 2. Call create_mockup with prompt or image_url -> returns task_id
-// 3. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload
-// 4. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
+// 2. (Optional, prompt flow only) Call get_styles to list visual styles for a model, then pass the style id in create_mockup
+// 3. Call create_mockup with prompt or image_url -> returns task_id
+// 4. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload
+// 5. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
 //
 // WHEN TO USE EACH TOOL:
 // - get_api_info: First call when user asks about limits, pricing, or capabilities
@@ -554,6 +555,7 @@ function getApiKey(extra) {
 // - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
 // - get_mockup_by_uuid: Only when user needs ONE specific template (already has UUID)
 // - search_products: Find a POD product UUID to ground MockAnything AI generations
+// - get_styles: List visual styles available for a MockAnything AI model (e.g. polaroid-etsy, ugc, fashion)
 // - create_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
 // - get_mockup_creation_status: Poll a MockAnything task until the mockup is ready for rendering
 // - create_render: For generating 1 mockup image
@@ -830,6 +832,36 @@ RETURNS: Array of {name, uuid} POD product entries matching the query.`,
     },
   },
   {
+    name: "get_styles",
+    description: `List visual styles that can be applied to a MockAnything AI generation (e.g. polaroid-etsy, ugc, fashion, urban).
+
+API: GET /mock-anything/styles
+
+WHEN TO USE: When user wants the AI output to land in a specific aesthetic (warm Polaroid, editorial flash, casual UGC, etc.) instead of the default photographic look. Call this BEFORE create_mockup to discover which styles are valid for the chosen model - not every model supports every style.
+
+WORKFLOW:
+1. Call this tool with the model you intend to pass to create_mockup
+2. Read each style's description to pick the look you want
+3. Pass the chosen style id as 'style' in create_mockup (along with the same model)
+
+NOTES:
+- Style only applies to the prompt flow (ignored for image_url).
+- When style is provided to create_mockup, model is REQUIRED.
+- Omit the model param here to list every known style across all models (broadest set).
+
+RETURNS: Array of {id, description, available_with} style entries.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        model: {
+          type: "string",
+          enum: ["seedream_4_0", "seedream_4_5", "nano_banana_2"],
+          description: "Optional. Filter styles to those supported by this model. Omit to list every style across all models.",
+        },
+      },
+    },
+  },
+  {
     name: "create_mockup",
     description: `Create a new MockAnything AI mockup template on the fly. The resulting mockup behaves exactly like one returned by get_mockups - pass its uuid to create_render to print artwork on it.
 
@@ -849,9 +881,10 @@ EXACTLY ONE of these must be provided:
 
 WORKFLOW:
 1. (Optional) Call search_products to find a product UUID for grounding the AI
-2. Call this tool with prompt OR image_url
-3. Use the returned task_id with get_mockup_creation_status, polling every ~2 seconds until state=SUCCESS
-4. Use the returned mockup.uuid as mockup_uuid in create_render
+2. (Optional, prompt flow only) Call get_styles to pick a visual style for a given model
+3. Call this tool with prompt OR image_url
+4. Use the returned task_id with get_mockup_creation_status, polling every ~2 seconds until state=SUCCESS
+5. Use the returned mockup.uuid as mockup_uuid in create_render
 
 MODELS (only apply to the prompt flow):
 - seedream_4_0 (default, 5 credits, ~20s, medium quality) - quick iterations
@@ -859,7 +892,8 @@ MODELS (only apply to the prompt flow):
 - nano_banana_2 (14 credits, ~30s, high quality) - production-ready final mockups
 
 NOTES:
-- product.uuid, model, and enhance_prompt only apply to the prompt flow (ignored otherwise).
+- product.uuid, model, style, and enhance_prompt only apply to the prompt flow (ignored otherwise).
+- style applies a visual aesthetic (e.g. polaroid-etsy, ugc, fashion). Discover valid values via get_styles. When style is set, model is REQUIRED — not every model supports every style.
 - collections accepts existing collections (by uuid) or new ones (by name, find-or-create).
 - Rate limit: 50 requests/minute on this endpoint.
 - File uploads (multipart image_file) are not supported via MCP - host the image and pass image_url.
@@ -893,7 +927,11 @@ RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the t
         model: {
           type: "string",
           enum: ["seedream_4_0", "seedream_4_5", "nano_banana_2"],
-          description: "Optional. AI model used for generation. Default: seedream_4_0. Only applies to the prompt flow.",
+          description: "Optional. AI model used for generation. Default: seedream_4_0. Only applies to the prompt flow. REQUIRED when style is provided.",
+        },
+        style: {
+          type: "string",
+          description: "Optional. Visual style applied to the AI generation (e.g. 'polaroid-etsy', 'ugc', 'fashion'). Discover valid ids via get_styles. Only applies to the prompt flow. When set, model is REQUIRED and must support this style (use get_styles?model=... to verify).",
         },
         name: {
           type: "string",
@@ -1802,6 +1840,7 @@ async function handleCreateMockanythingMockup(args, extra) {
     if (args.enhance_prompt !== undefined) payload.enhance_prompt = args.enhance_prompt;
     if (args.product) payload.product = args.product;
     if (args.model) payload.model = args.model;
+    if (args.style) payload.style = args.style;
     if (args.name) payload.name = args.name;
     if (args.collections) payload.collections = args.collections;
     if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
@@ -1815,6 +1854,25 @@ async function handleCreateMockanythingMockup(args, extra) {
     return ResponseFormatter.fromApiResponse(response, successMessage);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create MockAnything mockup");
+  }
+}
+
+async function handleGetMockanythingStyles(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  try {
+    const params = new URLSearchParams();
+    if (args && args.model) params.append("model", args.model);
+
+    const qs = params.toString();
+    const url = qs ? `/mock-anything/styles?${qs}` : "/mock-anything/styles";
+
+    const response = await createApiClient(apiKey, "get_styles").get(url);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to fetch MockAnything styles");
   }
 }
 
@@ -1851,6 +1909,7 @@ const toolHandlers = {
   get_mockups: handleGetMockups,
   get_mockup_by_uuid: handleGetMockupByUuid,
   search_products: handleSearchMockanythingProducts,
+  get_styles: handleGetMockanythingStyles,
   create_mockup: handleCreateMockanythingMockup,
   get_mockup_creation_status: handleGetMockanythingStatus,
   create_render: handleCreateRender,

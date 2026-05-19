@@ -71,6 +71,7 @@ If you want to connect via HTTP instead of NPX, use:
 | `get_mockups` | Get list of available mockups with optional filters |
 | `get_mockup_by_uuid` | Retrieve a specific mockup by UUID |
 | `search_products` | Search the POD product catalog used to ground MockAnything AI generations |
+| `get_styles` | List visual styles available for MockAnything AI generation (optionally filtered by model) |
 | `create_mockup` | Create a new AI mockup template from a prompt or image URL |
 | `get_mockup_creation_status` | Poll the status of a mockup creation task |
 | `create_render` | Create a single mockup render with design assets (1 credit) |
