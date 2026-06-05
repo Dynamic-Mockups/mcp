@@ -71,6 +71,7 @@ If you want to connect via HTTP instead of NPX, use:
 | `get_mockups` | Get list of available mockups with optional filters |
 | `get_mockup_by_uuid` | Retrieve a specific mockup by UUID |
 | `search_products` | Search the POD product catalog used to ground MockAnything AI generations |
+| `get_product_details` | Get a product's decoration areas (locations), colors and sizes — use a location to place artwork on a specific spot |
 | `get_styles` | List visual styles available for MockAnything AI generation (optionally filtered by model) |
 | `create_mockup` | Create a new AI mockup template from a prompt or image URL |
 | `get_mockup_creation_status` | Poll the status of a mockup creation task |
@@ -98,6 +99,7 @@ Ask your AI assistant:
 | Print files                    | "Export print-ready files at 300 DPI for my poster mockup"                                                                                  |
 | Embroidery effect              | "Transform my logo into an embroidery effect from url: https://example.com/my-logo.png"                                                     |
 | Create a Mockup from Prompt    | "Create a mockup of a guy wearing a Gildan 5000 t-shirt while running, then render my logo from url: https://example.com/my-logo.png on it" |
+| Decorate a specific area       | "Create a Gildan 5000 t-shirt mockup and place my logo from url: https://example.com/my-logo.png on the left chest" |
 | Create a Mockup from Image URL | "Turn this product photo into a mockup: https://example.com/product.jpg, and render my artwork on it"                                       |
 
 ## Error Handling

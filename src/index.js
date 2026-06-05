@@ -541,11 +541,12 @@ function getApiKey(extra) {
 // Note: get_mockups returns all data needed to render - no need to call get_mockup_by_uuid first!
 //
 // WORKFLOW FOR CREATING NEW MOCKUPS WITH AI (MockAnything):
-// 1. (Optional) Call search_products to find a POD product UUID for grounding
-// 2. (Optional, prompt flow only) Call get_styles to list visual styles for a model, then pass the style id in create_mockup
-// 3. Call create_mockup with prompt or image_url -> returns task_id
-// 4. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload
-// 5. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
+// 1. (Optional) Call search_products to find a POD product UUID for grounding. For generic t-shirt requests, prefer the Gildan 5000 (verified, fully-mapped decoration areas).
+// 2. (Optional) To place artwork on a SPECIFIC location (left chest, back, sleeve...), call get_product_details with the product uuid to list its decoration areas, then pass the chosen location as product.decorations in create_mockup.
+// 3. (Optional, prompt flow only) Call get_styles to list visual styles for a model, then pass the style id in create_mockup
+// 4. Call create_mockup with prompt or image_url -> returns task_id
+// 5. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload (smart_objects carry their decoration {location, name})
+// 6. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
 //
 // WHEN TO USE EACH TOOL:
 // - get_api_info: First call when user asks about limits, pricing, or capabilities
@@ -554,7 +555,8 @@ function getApiKey(extra) {
 // - get_collections: When user wants to browse mockup groups or find mockups by category
 // - get_mockups: PRIMARY tool - lists templates WITH smart_object UUIDs ready for rendering
 // - get_mockup_by_uuid: Only when user needs ONE specific template (already has UUID)
-// - search_products: Find a POD product UUID to ground MockAnything AI generations
+// - search_products: Find a POD product UUID to ground MockAnything AI generations (prefer Gildan 5000 for t-shirts)
+// - get_product_details: List a product's decoration areas (e.g. Full Chest, Left Chest, Left Sleeve, Full Back) so artwork can target a specific spot
 // - get_styles: List visual styles available for a MockAnything AI model (e.g. polaroid-etsy, ugc, fashion)
 // - create_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
 // - get_mockup_creation_status: Poll a MockAnything task until the mockup is ready for rendering
@@ -813,9 +815,10 @@ API: GET /mock-anything/products
 WHEN TO USE: When user wants to anchor an AI-generated mockup around a specific product (e.g., "Gildan 5000 t-shirt", "ceramic mug") instead of letting the model pick a generic one.
 
 WORKFLOW:
-1. Call this tool with a search term (matched against POD product names)
+1. Call this tool with a search term (matched against POD product names). For generic t-shirt requests, prefer the Gildan 5000 - a verified, fully-mapped t-shirt.
 2. Pick the desired product from the response
 3. Pass its uuid as product.uuid when calling create_mockup
+4. To place artwork on a SPECIFIC location (left chest, back, sleeve...), call get_product_details with that uuid to discover its decoration-area locations first.
 
 NOTE: Grounding is OPTIONAL. Skip this tool if you want the AI to compose freely from the prompt alone.
 
@@ -829,6 +832,32 @@ RETURNS: Array of {name, uuid} POD product entries matching the query.`,
         },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "get_product_details",
+    description: `Get the full detail of a single POD product - its identity, available DECORATION AREAS (where artwork can be placed, e.g. front_full_chest, left_chest, back_full), colors, and supported sizes.
+
+API: GET /mock-anything/products/{uuid}
+
+WHEN TO USE: When the user wants artwork/a design placed on a SPECIFIC location of a product (e.g. "put this logo on the left chest", "print on the back"). Use this to discover the product's real decoration-area "location" ids, then pass the chosen one(s) as product.decorations in create_mockup.
+
+WORKFLOW (place artwork on a specific location):
+1. Find the product uuid with search_products. For generic t-shirt requests, prefer the Gildan 5000 (verified, fully-mapped t-shirt with all decoration areas).
+2. Call this tool with that uuid to list its decoration areas (each has location, name, surface).
+3. Match the user's intent to an area (e.g. "left chest" -> location "left_chest"; "back" -> "back_full").
+4. Pass it to create_mockup as product.decorations: [{ location: "<location>" }]. Omit decorations to use the product's default (primary) area.
+
+RETURNS: { uuid, name, brand, style_code, category, subcategory, decorations: [{location, name, surface}], colors, supported_sizes }.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        uuid: {
+          type: "string",
+          description: "REQUIRED. POD product UUID (from search_products).",
+        },
+      },
+      required: ["uuid"],
     },
   },
   {
@@ -893,6 +922,7 @@ MODELS (only apply to the prompt flow):
 
 NOTES:
 - product.uuid, model, style, and enhance_prompt only apply to the prompt flow (ignored otherwise).
+- product.decorations targets specific print locations (e.g. left chest, back). Discover valid locations via get_product_details, then pass product.decorations: [{ location }]. Omit to use the product's default area. For generic t-shirt requests, prefer the Gildan 5000.
 - style applies a visual aesthetic (e.g. polaroid-etsy, ugc, fashion). Discover valid values via get_styles. When style is set, model is REQUIRED — not every model supports every style.
 - collections accepts existing collections (by uuid) or new ones (by name, find-or-create).
 - Rate limit: 50 requests/minute on this endpoint.
@@ -921,6 +951,32 @@ RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the t
             uuid: {
               type: "string",
               description: "POD product UUID. Get from search_products.",
+            },
+            decorations: {
+              type: "array",
+              description: "Optional. Decoration areas to place artwork on. Each targets a location from get_product_details. Omit to use the product's default (primary) area. Use this when the user wants artwork on a SPECIFIC spot (e.g. left chest, back).",
+              items: {
+                type: "object",
+                properties: {
+                  location: {
+                    type: "string",
+                    description: "Decoration-area location id from get_product_details (e.g. 'front_full_chest', 'left_chest', 'back_full').",
+                  },
+                  decoration_method: {
+                    type: "string",
+                    description: "Optional. Decoration method (e.g. 'dtg', 'screen_print', 'embroidery', 'dtf', 'heat_transfer').",
+                  },
+                  imprint_size: {
+                    type: "object",
+                    description: "Optional. Desired physical imprint size.",
+                    properties: {
+                      width: { type: "number" },
+                      height: { type: "number" },
+                      unit: { type: "string", description: "e.g. 'in' or 'mm'." },
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -982,6 +1038,8 @@ STATES:
 ON SUCCESS - the mockup field has the same shape as a get_mockups entry (with type "mockanything"):
 - mockup.uuid: pass as mockup_uuid in create_render
 - mockup.smart_objects[].uuid: pass as smart_objects[].uuid in create_render to place artwork on each detected print area
+- mockup.smart_objects[].decoration: {location, name} - the decoration area this smart object covers. Use it to pick the RIGHT smart object when the user asked for a specific location (e.g. render on the one whose decoration.location is "left_chest").
+- mockup.unrendered_decorations: [{location, reason}] - requested areas that were NOT placed (e.g. not visible in the generated image); do not try to render artwork there.
 
 From here, render the mockup exactly like a classic one - the Render API handles both types through the same endpoint.
 
@@ -1812,6 +1870,26 @@ async function handleSearchMockanythingProducts(args, extra) {
   }
 }
 
+async function handleGetMockanythingProductDetails(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  if (!args.uuid || !String(args.uuid).trim()) {
+    return ResponseFormatter.error(
+        "Missing required parameter",
+        { solution: "Provide the POD product uuid (from search_products)." }
+    );
+  }
+
+  try {
+    const response = await createApiClient(apiKey, "get_product_details").get(`/mock-anything/products/${args.uuid}`);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to fetch POD product details");
+  }
+}
+
 async function handleCreateMockanythingMockup(args, extra) {
   const apiKey = getApiKey(extra);
   const error = validateApiKey(apiKey);
@@ -1909,6 +1987,7 @@ const toolHandlers = {
   get_mockups: handleGetMockups,
   get_mockup_by_uuid: handleGetMockupByUuid,
   search_products: handleSearchMockanythingProducts,
+  get_product_details: handleGetMockanythingProductDetails,
   get_styles: handleGetMockanythingStyles,
   create_mockup: handleCreateMockanythingMockup,
   get_mockup_creation_status: handleGetMockanythingStatus,
