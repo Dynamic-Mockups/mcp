@@ -548,6 +548,11 @@ function getApiKey(extra) {
 // 5. Poll get_mockup_creation_status with task_id until state=SUCCESS -> returns mockup payload (smart_objects carry their decoration {location, name})
 // 6. Use mockup.uuid as mockup_uuid in create_render (works exactly like classic mockups)
 //
+// WORKFLOW FOR MOTION MOCKUPS (IMAGE-TO-VIDEO, MotionMockups AI):
+// 1. (Recommended) Call get_video_models to pick a model + valid duration (+ aspect_ratio) and learn the credit cost
+// 2. Call create_video with start_image_url (a public image URL) -> returns request_id
+// 3. Poll get_video_status with request_id (every ~5s) until status=COMPLETED -> returns video.url (a short generated video)
+//
 // WHEN TO USE EACH TOOL:
 // - get_api_info: First call when user asks about limits, pricing, or capabilities
 // - embed_mockup_editor: When user wants to embed the mockup editor in their website/app
@@ -560,6 +565,9 @@ function getApiKey(extra) {
 // - get_styles: List visual styles available for a MockAnything AI model (e.g. polaroid-etsy, ugc, fashion)
 // - create_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
 // - get_mockup_creation_status: Poll a MockAnything task until the mockup is ready for rendering
+// - get_video_models: List MotionMockups AI (image-to-video) models, durations, credit costs and aspect ratios
+// - create_video: Generate a short AI video from a product image URL (returns request_id to poll)
+// - get_video_status: Poll a MotionMockups AI request until the video is COMPLETED (returns video.url)
 // - create_render: For generating 1 mockup image
 // - create_batch_render: For generating 2+ mockup images (more efficient)
 // - export_print_files: When user needs production-ready files with specific DPI
@@ -1053,6 +1061,118 @@ RETURNS: {task_id, state, image_url, status, mockup}.`,
         },
       },
       required: ["task_id"],
+    },
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // MOTION MOCKUPS (IMAGE-TO-VIDEO) TOOLS
+  // ─────────────────────────────────────────────────────────────────────────────
+  {
+    name: "get_video_models",
+    description: `List the MotionMockups AI models available for image-to-video generation, with their allowed durations, per-duration credit cost (audio on/off), estimated render time, and supported aspect ratios.
+
+API: GET /motion-mockups/models
+
+WHEN TO USE: Call this BEFORE create_video to choose a model, a valid duration, and (if supported) an aspect ratio - and to tell the user the credit cost up front.
+
+RETURNS: { models: [ { value, display_name, default_duration, durations: [ { seconds, credits: { audio_off, audio_on }, estimated_time_minutes } ], aspect_ratios, default_aspect_ratio, supports_aspect_ratio } ], default_model }.
+
+NOTES:
+- The duration passed to create_video must be one of the chosen model's durations[].seconds.
+- aspect_ratio only applies when the chosen model has supports_aspect_ratio = true.
+- Credit cost is durations[].credits.audio_on when generate_audio is true, otherwise audio_off.`,
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "create_video",
+    description: `Generate a short AI video from a single product image (MotionMockups AI). Asynchronous - returns a request_id to poll with get_video_status.
+
+API: POST /motion-mockups/submit
+COST: credits depend on model + duration + audio (see get_video_models). Reserved on submit, automatically refunded if generation fails.
+
+WHEN TO USE: When the user wants to turn a product image (provided as a public URL) into a short marketing/social video.
+
+WORKFLOW:
+1. (Recommended) Call get_video_models to pick a model + valid duration (+ aspect_ratio if supported) and to know the credit cost.
+2. Call this tool with start_image_url (and optionally model/duration/prompt/...) -> returns request_id.
+3. Poll get_video_status with the request_id every ~5 seconds until status=COMPLETED (videos take ~2-15 minutes), then use video.url.
+
+NOTES:
+- File uploads are not supported - host the image and pass start_image_url (must be publicly reachable).
+- If prompt is omitted, a prompt is auto-generated from the image.
+- Rate limit: 10 requests/minute on this endpoint.
+
+RETURNS: { request_id, status, model, credits, status_url }. Poll get_video_status with request_id.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        start_image_url: {
+          type: "string",
+          description: "REQUIRED. Public URL of the product image to animate. Must be reachable by the API (no localhost / auth-gated URLs).",
+        },
+        model: {
+          type: "string",
+          enum: ["kling_v2.6", "kling_v3_pro"],
+          description: "Optional. Image-to-video model. Default: kling_v2.6. kling_v3_pro supports aspect_ratio and durations from 3-15s.",
+        },
+        prompt: {
+          type: "string",
+          description: "Optional. Text prompt describing the desired motion (max 2500 chars). If omitted, a prompt is auto-generated from the image.",
+        },
+        negative_prompt: {
+          type: "string",
+          description: "Optional. What to avoid in the generated video (max 1000 chars).",
+        },
+        duration: {
+          type: "number",
+          description: "Optional. Video length in seconds. Must be one of the selected model's allowed durations (see get_video_models). Defaults to the model's default duration.",
+        },
+        aspect_ratio: {
+          type: "string",
+          description: "Optional. Output aspect ratio (e.g. '16:9', '9:16', '1:1'). Only valid for models where supports_aspect_ratio is true (see get_video_models). Omit otherwise.",
+        },
+        generate_audio: {
+          type: "boolean",
+          description: "Optional. Also generate audio. Increases the credit cost by a model-specific multiplier. Default: false.",
+        },
+        skip_discovery: {
+          type: "boolean",
+          description: "Optional. When true and no prompt is provided, skip image auto-prompting and use a neutral default prompt. Default: false.",
+        },
+      },
+      required: ["start_image_url"],
+    },
+  },
+  {
+    name: "get_video_status",
+    description: `Poll the status of a MotionMockups AI video generation request.
+
+API: GET /motion-mockups/status/{requestId}
+
+WHEN TO USE: After create_video, poll this until the video is ready.
+
+POLLING STRATEGY:
+- Poll every ~5 seconds. Generation typically takes 2-15 minutes (see estimated_time_minutes from get_video_models).
+
+STATES (decide by the "status" field, not the message):
+- IN_QUEUE / PROCESSING: still working (queue_position may be present). Poll again shortly.
+- COMPLETED: done. The "video" object is populated - use video.url (a permanent URL) to present/download the video.
+- FAILED / CANCELLED / ERROR: terminated without a video. Reserved credits are automatically refunded.
+
+RETURNS while processing: { request_id, status, queue_position }.
+RETURNS on success: { request_id, status: "COMPLETED", video: { url, content_type, file_name, file_size } }.`,
+    inputSchema: {
+      type: "object",
+      properties: {
+        request_id: {
+          type: "string",
+          description: "REQUIRED. The request_id returned from create_video.",
+        },
+      },
+      required: ["request_id"],
     },
   },
 
@@ -1974,6 +2094,68 @@ async function handleGetMockanythingStatus(args, extra) {
   }
 }
 
+async function handleGetVideoModels(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  try {
+    const response = await createApiClient(apiKey, "get_video_models").get("/motion-mockups/models");
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to fetch MotionMockups AI models");
+  }
+}
+
+async function handleCreateVideo(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  if (!args.start_image_url || !String(args.start_image_url).trim()) {
+    return ResponseFormatter.error(
+        "Missing required parameter",
+        { solution: "Provide start_image_url - a public URL of the product image to animate." }
+    );
+  }
+
+  try {
+    const payload = { start_image_url: args.start_image_url };
+    if (args.model) payload.model = args.model;
+    if (args.prompt) payload.prompt = args.prompt;
+    if (args.negative_prompt) payload.negative_prompt = args.negative_prompt;
+    if (args.duration !== undefined) payload.duration = args.duration;
+    if (args.aspect_ratio) payload.aspect_ratio = args.aspect_ratio;
+    if (args.generate_audio !== undefined) payload.generate_audio = args.generate_audio;
+    if (args.skip_discovery !== undefined) payload.skip_discovery = args.skip_discovery;
+
+    const response = await createApiClient(apiKey, "create_video").post("/motion-mockups/submit", payload);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to start MotionMockups AI video generation");
+  }
+}
+
+async function handleGetVideoStatus(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  if (!args.request_id || !String(args.request_id).trim()) {
+    return ResponseFormatter.error(
+        "Missing required parameter",
+        { solution: "Provide the request_id returned from create_video." }
+    );
+  }
+
+  try {
+    const response = await createApiClient(apiKey, "get_video_status").get(`/motion-mockups/status/${args.request_id}`);
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to get MotionMockups AI status");
+  }
+}
+
 // =============================================================================
 // Tool Router
 // =============================================================================
@@ -1991,6 +2173,9 @@ const toolHandlers = {
   get_styles: handleGetMockanythingStyles,
   create_mockup: handleCreateMockanythingMockup,
   get_mockup_creation_status: handleGetMockanythingStatus,
+  get_video_models: handleGetVideoModels,
+  create_video: handleCreateVideo,
+  get_video_status: handleGetVideoStatus,
   create_render: handleCreateRender,
   create_batch_render: handleCreateBatchRender,
   export_print_files: handleExportPrintFiles,
