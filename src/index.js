@@ -527,6 +527,60 @@ function getApiKey(extra) {
   return API_KEY;
 }
 
+function mockAnythingEditorUrl(mockupUuid) {
+  if (!mockupUuid || typeof mockupUuid !== "string") return null;
+  return `https://app.dynamicmockups.com/mock-anything-ai/${mockupUuid}/design/${mockupUuid}`;
+}
+
+function addMockAnythingEditorUrls(data, fallbackMockupUuid = null) {
+  if (!data || typeof data !== "object") return data;
+
+  const mockupUuid = typeof data.mockup_uuid === "string"
+      ? data.mockup_uuid
+      : typeof data.mockup?.uuid === "string"
+          ? data.mockup.uuid
+          : fallbackMockupUuid;
+  const taskId = typeof data.task_id === "string" ? data.task_id : null;
+  const editorUuid = mockupUuid || taskId;
+  const editorUrl = mockAnythingEditorUrl(editorUuid);
+  if (editorUrl) data.editor_url = editorUrl;
+
+  if (data.mockup && typeof data.mockup === "object" && typeof data.mockup.uuid === "string") {
+    data.mockup.editor_url = mockAnythingEditorUrl(data.mockup.uuid);
+  }
+
+  if (data.data && typeof data.data === "object") {
+    if (Array.isArray(data.data)) {
+      data.data.forEach((item) => addMockAnythingEditorUrls(item, fallbackMockupUuid));
+    } else {
+      addMockAnythingEditorUrls(data.data, mockupUuid || fallbackMockupUuid);
+      if (!data.editor_url && data.data.editor_url) data.editor_url = data.data.editor_url;
+    }
+  }
+
+  return data;
+}
+
+function editorUrlsFromBatchRenders(renders) {
+  const urls = [];
+  const seen = new Set();
+  for (const render of renders || []) {
+    const url = mockAnythingEditorUrl(render?.mockup_uuid);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    urls.push(url);
+  }
+  return urls;
+}
+
+function addRenderMockAnythingEditorUrl(data, mockupUuid) {
+  const editorUrl = mockAnythingEditorUrl(mockupUuid);
+  if (editorUrl && data && typeof data === "object") {
+    data.mockanything_editor_url = editorUrl;
+  }
+  return data;
+}
+
 // =============================================================================
 // Tool Definitions
 // =============================================================================
@@ -563,6 +617,7 @@ function getApiKey(extra) {
 // - search_products: Find a POD product UUID to ground MockAnything AI generations (prefer Gildan 5000 for t-shirts)
 // - get_product_details: List a product's decoration areas (e.g. Full Chest, Left Chest, Left Sleeve, Full Back) so artwork can target a specific spot
 // - get_styles: List visual styles available for a MockAnything AI model (e.g. polaroid-etsy, ugc, fashion)
+// - get_aspect_ratios: List output aspect ratios + per-model support for MockAnything AI generation
 // - create_mockup: Create a brand-new mockup on the fly via AI prompt or image URL
 // - get_mockup_creation_status: Poll a MockAnything task until the mockup is ready for rendering
 // - get_video_models: List MotionMockups AI (image-to-video) models, durations, credit costs and aspect ratios
@@ -899,6 +954,28 @@ RETURNS: Array of {id, description, available_with} style entries.`,
     },
   },
   {
+    name: "get_aspect_ratios",
+    description: `List output aspect ratios available for MockAnything AI generation, with per-model support (e.g. 1:1 Shopify, 4:5 Instagram, 2:3 Pinterest, 9:16 Reels, 16:9 YouTube).
+
+API: GET /mock-anything/aspect-ratios
+
+WHEN TO USE: When the user wants a specific output canvas shape (square product shot, vertical Reels, wide YouTube banner). Call BEFORE create_mockup to discover which ratios the chosen model supports - GPT Image models only support 1:1/3:2/2:3.
+
+WORKFLOW:
+1. Call this tool to see the catalog and the supported_by_model map
+2. Pass the chosen value as 'aspect_ratio' in create_mockup
+
+NOTES:
+- When aspect_ratio is omitted on create_mockup, a product.selected_size with physical dimensions implies the canvas shape (a 12x12 wall art renders square, a 28x40 renders 2:3 portrait); otherwise output is square.
+- Values are enforced on the provider API call, not via the prompt.
+
+RETURNS: {default, ratios: [{value, w, h, label}], supported_by_model}.`,
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
     name: "create_mockup",
     description: `Create a new MockAnything AI mockup template on the fly. The resulting mockup behaves exactly like one returned by get_mockups - pass its uuid to create_render to print artwork on it.
 
@@ -932,6 +1009,7 @@ NOTES:
 - product.uuid, model, style, and enhance_prompt only apply to the prompt flow (ignored otherwise).
 - product.decorations targets specific print locations (e.g. left chest, back). Discover valid locations via get_product_details, then pass product.decorations: [{ location }]. Omit to use the product's default area. For generic t-shirt requests, prefer the Gildan 5000.
 - style applies a visual aesthetic (e.g. polaroid-etsy, ugc, fashion). Discover valid values via get_styles. When style is set, model is REQUIRED — not every model supports every style.
+- product.selected_size renders the product at a chosen size variation's real-world scale (wall art especially: a 12x12 reads as a small accent, a 28x40 dominates the wall). aspect_ratio sets the output canvas; when omitted, the selected size implies it. Discover ratios via get_aspect_ratios.
 - collections accepts existing collections (by uuid) or new ones (by name, find-or-create).
 - Rate limit: 50 requests/minute on this endpoint.
 - File uploads (multipart image_file) are not supported via MCP - host the image and pass image_url.
@@ -959,6 +1037,10 @@ RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the t
             uuid: {
               type: "string",
               description: "POD product UUID. Get from search_products.",
+            },
+            selected_size: {
+              type: "string",
+              description: "Optional. Product size variation label from get_product_details sizes (e.g. '28x40' for wall art, 'XL' for apparel). Generation renders the product at that size's real-world scale, and for wall art the size also implies the output canvas shape (12x12 renders square, 28x40 renders 2:3 portrait). Omit for the product's default size.",
             },
             decorations: {
               type: "array",
@@ -996,6 +1078,10 @@ RETURNS: {task_id, status} - the task_id will also be the mockup.uuid once the t
         style: {
           type: "string",
           description: "Optional. Visual style applied to the AI generation (e.g. 'polaroid-etsy', 'ugc', 'fashion'). Discover valid ids via get_styles. Only applies to the prompt flow. When set, model is REQUIRED and must support this style (use get_styles?model=... to verify).",
+        },
+        aspect_ratio: {
+          type: "string",
+          description: "Optional. Output aspect ratio (e.g. '1:1', '4:5', '2:3', '16:9'). Discover valid values per model via get_aspect_ratios. When omitted, a product.selected_size with physical dimensions implies the canvas shape; otherwise output is square ('1:1').",
         },
         name: {
           type: "string",
@@ -1203,7 +1289,7 @@ SMART OBJECT OPTIONS:
 - adjustment_layers: {brightness, contrast, opacity, saturation, vibrance, blur}
 - print_area_preset_uuid: auto-position using preset (get from mockup details)
 
-RETURNS: {export_label, export_path} - export_path is the rendered image URL (valid 24h).`,
+RETURNS: {export_label, export_path, mockanything_editor_url} - export_path is the rendered image URL (valid 24h). For MockAnything templates, mockanything_editor_url opens the template in the web editor.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -1301,6 +1387,34 @@ RETURNS: {export_label, export_path} - export_path is the rendered image URL (va
               print_area_preset_uuid: {
                 type: "string",
                 description: "Optional. UUID of print area preset for automatic positioning. Alternative to manual size/position.",
+              },
+              decoration_method: {
+                type: "object",
+                description: "Optional. Render-time decoration/print finish applied to this artwork. MockAnything templates only; classic (PSD) mockups ignore it. Omit to use the template's default finish.",
+                required: ["method"],
+                properties: {
+                  method: {
+                    type: "string",
+                    enum: ["universal", "screen_print", "dtg", "uv_print", "laser_engrave_surface", "laser_engrave_deep", "deboss"],
+                    description: "The print finish. universal = flat print (default); screen_print/dtg/uv_print = print finishes; laser_engrave_surface/laser_engrave_deep = engraving; deboss = pressed-in impression.",
+                  },
+                  options: {
+                    type: "object",
+                    description: "Optional fine-tuning. Only laser_engrave_surface, laser_engrave_deep and deboss use options; omitted values use sensible defaults.",
+                    properties: {
+                      material: { type: "string", enum: ["metal", "leather", "wood"], description: "Simulated material for engrave/deboss methods. Default: leather." },
+                      desaturation: { type: "number", description: "laser_engrave_surface: how much artwork color is removed (0-1). Default: 0.15." },
+                      burn_darkness: { type: "number", description: "laser_engrave_surface: darkness of the burned engraving. Default: 1.0." },
+                      wall_width: { type: "number", description: "laser_engrave_deep: width of engraved channel walls, in pixels. Default: 4." },
+                      groove_darkness: { type: "number", description: "laser_engrave_deep: shadow darkness inside the grooves (0-1). Default: 0.45." },
+                      depth: { type: "number", description: "deboss: depth of the pressed-in impression (0-1). Default: 0.86." },
+                      shadow_falloff: { type: "number", description: "deboss: softness of the impression's shadow edge, in pixels. Default: 4.5." },
+                      shadow_darkness: { type: "number", description: "deboss: darkness of the impression's shadow (0-1). Default: 0.62." },
+                      highlight_brightness: { type: "number", description: "deboss: brightness of the raised highlight. Default: 1.12." },
+                      center_darkening: { type: "number", description: "deboss: darkening toward the center of the impression (0-1). Default: 1.0." },
+                    },
+                  },
+                },
               },
             },
           },
@@ -1426,6 +1540,30 @@ RETURNS: {total_renders, successful_renders, failed_renders, renders[]} where ea
                       },
                     },
                     print_area_preset_uuid: { type: "string", description: "Optional." },
+                    decoration_method: {
+                      type: "object",
+                      description: "Optional. Render-time decoration/print finish (MockAnything only). Same structure as create_render.",
+                      required: ["method"],
+                      properties: {
+                        method: { type: "string", enum: ["universal", "screen_print", "dtg", "uv_print", "laser_engrave_surface", "laser_engrave_deep", "deboss"], description: "Print finish. universal = flat (default); laser_engrave_surface/laser_engrave_deep = engraving; deboss = pressed-in impression." },
+                        options: {
+                          type: "object",
+                          description: "Optional fine-tuning for engrave/deboss methods (omitted values use defaults).",
+                          properties: {
+                            material: { type: "string", enum: ["metal", "leather", "wood"], description: "Material for engrave/deboss. Default: leather." },
+                            desaturation: { type: "number", description: "laser_engrave_surface. Default: 0.15." },
+                            burn_darkness: { type: "number", description: "laser_engrave_surface. Default: 1.0." },
+                            wall_width: { type: "number", description: "laser_engrave_deep, px. Default: 4." },
+                            groove_darkness: { type: "number", description: "laser_engrave_deep. Default: 0.45." },
+                            depth: { type: "number", description: "deboss. Default: 0.86." },
+                            shadow_falloff: { type: "number", description: "deboss, px. Default: 4.5." },
+                            shadow_darkness: { type: "number", description: "deboss. Default: 0.62." },
+                            highlight_brightness: { type: "number", description: "deboss. Default: 1.12." },
+                            center_darkening: { type: "number", description: "deboss. Default: 1.0." },
+                          },
+                        },
+                      },
+                    },
                   },
                 },
               },
@@ -1861,6 +1999,7 @@ async function handleCreateRender(args, extra) {
 
     const response = await createApiClient(apiKey, "create_render").post("/renders", payload);
     if (response.data?.data) response.data = response.data.data;
+    addRenderMockAnythingEditorUrl(response.data, args.mockup_uuid);
     return ResponseFormatter.fromApiResponse(response, "Render created (1 credit used)");
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to create render");
@@ -1878,6 +2017,9 @@ async function handleCreateBatchRender(args, extra) {
 
     const response = await createApiClient(apiKey, "create_batch_render").post("/renders/batch", payload);
     if (response.data?.data) response.data = response.data.data;
+    if (response.data && typeof response.data === "object") {
+      response.data.mockanything_editor_urls = editorUrlsFromBatchRenders(args.renders);
+    }
     const count = args.renders?.length || 0;
     return ResponseFormatter.fromApiResponse(response, `Batch render complete (${count} credits used)`);
   } catch (err) {
@@ -2010,6 +2152,19 @@ async function handleGetMockanythingProductDetails(args, extra) {
   }
 }
 
+async function handleGetMockanythingAspectRatios(args, extra) {
+  const apiKey = getApiKey(extra);
+  const error = validateApiKey(apiKey);
+  if (error) return error;
+
+  try {
+    const response = await createApiClient(apiKey, "get_aspect_ratios").get("/mock-anything/aspect-ratios");
+    return ResponseFormatter.fromApiResponse(response);
+  } catch (err) {
+    return ResponseFormatter.fromError(err, "Failed to fetch MockAnything aspect ratios");
+  }
+}
+
 async function handleCreateMockanythingMockup(args, extra) {
   const apiKey = getApiKey(extra);
   const error = validateApiKey(apiKey);
@@ -2039,11 +2194,13 @@ async function handleCreateMockanythingMockup(args, extra) {
     if (args.product) payload.product = args.product;
     if (args.model) payload.model = args.model;
     if (args.style) payload.style = args.style;
+    if (args.aspect_ratio) payload.aspect_ratio = args.aspect_ratio;
     if (args.name) payload.name = args.name;
     if (args.collections) payload.collections = args.collections;
     if (args.catalog_uuid) payload.catalog_uuid = args.catalog_uuid;
 
     const response = await createApiClient(apiKey, "create_mockup").post("/mock-anything/create", payload);
+    addMockAnythingEditorUrls(response.data);
 
     const successMessage = hasPrompt
         ? "MockAnything AI generation started. Poll get_mockup_creation_status with the returned task_id (every ~2s) until state=SUCCESS, then use mockup.uuid in create_render."
@@ -2088,6 +2245,7 @@ async function handleGetMockanythingStatus(args, extra) {
 
   try {
     const response = await createApiClient(apiKey, "get_mockup_creation_status").get(`/mock-anything/status/${args.task_id}`);
+    addMockAnythingEditorUrls(response.data, args.task_id);
     return ResponseFormatter.fromApiResponse(response);
   } catch (err) {
     return ResponseFormatter.fromError(err, "Failed to get MockAnything mockup status");
@@ -2171,6 +2329,7 @@ const toolHandlers = {
   search_products: handleSearchMockanythingProducts,
   get_product_details: handleGetMockanythingProductDetails,
   get_styles: handleGetMockanythingStyles,
+  get_aspect_ratios: handleGetMockanythingAspectRatios,
   create_mockup: handleCreateMockanythingMockup,
   get_mockup_creation_status: handleGetMockanythingStatus,
   get_video_models: handleGetVideoModels,
